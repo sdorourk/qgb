@@ -36,7 +36,8 @@ impl DecomposedByte {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Opcode {
     Nop,
     LdDerefImmSp(u16),
@@ -371,7 +372,8 @@ impl Opcode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Register {
     A,
     B,
@@ -414,7 +416,8 @@ impl Display for Register {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum WideRegister {
     BC,
     DE,
@@ -457,7 +460,8 @@ impl Display for WideRegister {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum FlagCondition {
     NZ,
     Z,

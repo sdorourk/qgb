@@ -20,6 +20,7 @@ pub struct Instruction {
     pub reset_flags: FlagsRegister,
 }
 
+#[derive(Debug)]
 struct InstructionBuilder {
     opcode: Opcode,
     length: Option<u16>,
@@ -414,7 +415,7 @@ impl Instruction {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::opcode::FlagCondition;
+    use crate::cpu::opcode::{FlagCondition, WideRegister};
 
     use super::*;
 
@@ -488,6 +489,116 @@ mod test {
             -22i8 as u8,
             0x20, // JR NZ, -10
             -10i8 as u8,
+            0x01, // LD BC, $FF10
+            0x10,
+            0xFF,
+            0x19, // ADD HL, DE
+            0x02, // LD (BC), A
+            0x0A, // LD A, (BC)
+            0x22, // LD (HL+), A
+            0x2A, // Ld A, (HL+)
+            0x32, // Ld (HL-), A
+            0x3A, // Ld A, (HL-)
+            0x33, // INC SP
+            0x2B, // DEC HL
+            0x34, // INC (HL)
+            0x05, // DEC B
+            0x3E, // LD A, $10
+            0x10,
+            0x07, // RLCA
+            0x0F, // RRCA
+            0x17, // RLA
+            0x1F, // RRA
+            0x27, // DAA
+            0x2F, // CPL
+            0x37, // SCF
+            0x3F, // CCF
+            0x56, // LD D, (HL)
+            0x76, // HALT
+            0x81, // ADD A, C
+            0x8B, // ADC A, E
+            0x97, // SUB A, A
+            0x98, // SBC A, B
+            0xA2, // AND A, D
+            0xAC, // XOR A, H
+            0xB5, // OR A, L
+            0xBE, // CP A, (HL)
+            0xC8, // RET Z
+            0xE0, // LD ($FF00+$AB), A
+            0xAB,
+            0xE8, // ADD SP, -12
+            -12i8 as u8,
+            0xF0, // LD A, ($FF00+$23)
+            0x23,
+            0xF8, // LD HL, SP+$12
+            0x12,
+            0xF1, // POP AF
+            0xC9, // RET
+            0xD9, // RETI
+            0xE9, // JP HL
+            0xF9, // LD SP, HL
+            0xD2, // JP NC, $A0F0
+            0xF0,
+            0xA0,
+            0xE2, // LD ($FF00+C), A
+            0xEA, // LD ($CAB0), A
+            0xB0,
+            0xCA,
+            0xF2, // LD A, ($FF00+C)
+            0xFA, // LD A, ($CAB0)
+            0xB0,
+            0xCA,
+            0xC3, // JP $FF0E
+            0x0E,
+            0xFF,
+            0xF3, // DI
+            0xFB, // EI
+            0xDC, // CALL C, $FF0E
+            0x0E,
+            0xFF,
+            0xC5, // PUSH BC
+            0xCD, // CALL $1230
+            0x30,
+            0x12,
+            0xC6, // ADD A, $12
+            0x12,
+            0xCE, // ADC, A, $12
+            0x12,
+            0xD6, // SUB A, $12
+            0x12,
+            0xDE, // SBC A, $12
+            0x12,
+            0xE6, // AND A, $12
+            0x12,
+            0xEE, // XOR A, $12
+            0x12,
+            0xF6, // OR A, $12
+            0x12,
+            0xFE, // CP A, $12
+            0x12,
+            0xDF, // RST $18
+            0xCB, // RLC B
+            0x00,
+            0xCB, // RRC C
+            0x09,
+            0xCB, // RL D
+            0x12,
+            0xCB, // RR E
+            0x1B,
+            0xCB, // SLA H
+            0x24,
+            0xCB, // SRA L
+            0x2D,
+            0xCB, // SWAP (HL)
+            0x36,
+            0xCB, // SRL A
+            0x3F,
+            0xCB, // BIT 3, E
+            0x5B,
+            0xCB, // RES 3, (HL)
+            0x9E,
+            0xCB, // SET 7, C
+            0xF9,
         ];
         let correct_opcodes = vec![
             Opcode::Nop,
@@ -495,6 +606,78 @@ mod test {
             Opcode::Stop,
             Opcode::Jr(-22),
             Opcode::JrCond(FlagCondition::NZ, -10),
+            Opcode::LdWideRegImm(WideRegister::BC, 0xFF10),
+            Opcode::AddHLWideReg(WideRegister::DE),
+            Opcode::LdDerefWideRegA(WideRegister::BC),
+            Opcode::LdADerefWideReg(WideRegister::BC),
+            Opcode::LdHLIncA,
+            Opcode::LdAHLInc,
+            Opcode::LdHLDecA,
+            Opcode::LdAHLDec,
+            Opcode::IncWideReg(WideRegister::SP),
+            Opcode::DecWideReg(WideRegister::HL),
+            Opcode::IncReg(Register::DerefHL),
+            Opcode::DecReg(Register::B),
+            Opcode::LdRegImm(Register::A, 0x10),
+            Opcode::Rlca,
+            Opcode::Rrca,
+            Opcode::Rla,
+            Opcode::Rra,
+            Opcode::Daa,
+            Opcode::Cpl,
+            Opcode::Scf,
+            Opcode::Ccf,
+            Opcode::Ld(Register::D, Register::DerefHL),
+            Opcode::Halt,
+            Opcode::Add(Register::C),
+            Opcode::Adc(Register::E),
+            Opcode::Sub(Register::A),
+            Opcode::Sbc(Register::B),
+            Opcode::And(Register::D),
+            Opcode::Xor(Register::H),
+            Opcode::Or(Register::L),
+            Opcode::Cp(Register::DerefHL),
+            Opcode::RetCond(FlagCondition::Z),
+            Opcode::LdOffsetImmA(0xAB),
+            Opcode::AddSpDisp(-12),
+            Opcode::LdAOffsetImm(0x23),
+            Opcode::LdHLSPDisp(0x12),
+            Opcode::PopWideReg(WideRegister::AF),
+            Opcode::Ret,
+            Opcode::Reti,
+            Opcode::JpHL,
+            Opcode::LdSPHL,
+            Opcode::JPCondImm(FlagCondition::NC, 0xA0F0),
+            Opcode::LdOffsetCA,
+            Opcode::LdDerefImmA(0xCAB0),
+            Opcode::LdAOffsetC,
+            Opcode::LdADerefImm(0xCAB0),
+            Opcode::JP(0xFF0E),
+            Opcode::DI,
+            Opcode::EI,
+            Opcode::CallCondImm(FlagCondition::C, 0xFF0E),
+            Opcode::PushWideReg(WideRegister::BC),
+            Opcode::CallImm(0x1230),
+            Opcode::AddImm(0x12),
+            Opcode::AdcImm(0x12),
+            Opcode::SubImm(0x12),
+            Opcode::SbcImm(0x12),
+            Opcode::AndImm(0x12),
+            Opcode::XorImm(0x12),
+            Opcode::OrImm(0x12),
+            Opcode::CpImm(0x12),
+            Opcode::Rst(0x18),
+            Opcode::Rlc(Register::B),
+            Opcode::Rrc(Register::C),
+            Opcode::Rl(Register::D),
+            Opcode::Rr(Register::E),
+            Opcode::Sla(Register::H),
+            Opcode::Sra(Register::L),
+            Opcode::Swap(Register::DerefHL),
+            Opcode::Srl(Register::A),
+            Opcode::Bit(3, Register::E),
+            Opcode::Res(3, Register::DerefHL),
+            Opcode::Set(7, Register::C),
         ];
 
         let opcodes: Vec<Opcode> = VecByteStream::new(&rom)
