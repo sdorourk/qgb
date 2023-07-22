@@ -1,7 +1,13 @@
+//! CPU instructions and execution.
+//!
+//! Type `Instruction` represents an `Opcode` and the corresponding instruction
+//! metadata.  
+
 use crate::cpu::opcode::Opcode;
 
 use super::{opcode::Register, FlagsRegister, TCycles};
 
+/// A CPU opcode and its corresponding metadata.
 #[derive(Debug)]
 pub struct Instruction {
     /// Instruction opcode
@@ -20,6 +26,12 @@ pub struct Instruction {
     pub reset_flags: FlagsRegister,
 }
 
+/// Simplified instruction builder.
+///
+/// Used to construct an `Instruction` type. Since many fields in the `Instruction`
+/// type default to the same value, it can be tedious to specify each field manually.
+/// `InstructionBuilder` takes these default values into consideration, allowing us
+/// to only specify the fields that differ.
 #[derive(Debug)]
 struct InstructionBuilder {
     opcode: Opcode,
@@ -94,6 +106,10 @@ impl InstructionBuilder {
     }
 }
 
+/// The `ByteStream` trait allows for reading bytes from a source.
+///
+/// The only required method is `fetch()`. A call to `fetch()` must always return a byte,
+/// the operation is not allowed to fail.
 pub trait ByteStream {
     /// Fetch the next byte
     fn fetch(&mut self) -> u8;

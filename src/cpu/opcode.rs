@@ -1,41 +1,17 @@
+//! Opcode representation and parsing.
+//!
+//! Type `Opcode` represents a CPU opcode and its operands.  `Opcode` features a
+//! `try_from()` function that decodes and parses the next opcode from a `ByteStream` type.  
+//! The decoding and parsing steps are done algorithmically based on the method described
+//! at <https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html>.
+
 use std::fmt::Display;
 
 use crate::bits::Bits;
 
 use super::instruction::ByteStream;
 
-/// Various octal digits and bits of a byte
-///
-/// Used to algorithmically determine which `Opcode` a given byte corresponds to.
-/// The fields are based on the following:
-///  - x = the bytes's 1st octal digit (i.e., bits 7-6)
-///  - y = the bytes's 2nd octal digit (i.e., bits 5-3)
-///  - z = the bytes's 3rd octal digit (i.e., bits 2-0)
-///  - p = y right shifted one position (i.e., bits 5-4)
-///  - q = y modulo 2 (i.e., bit 3)
-#[derive(Debug)]
-struct DecomposedByte {
-    pub byte: u8,
-    pub x: u8,
-    pub y: u8,
-    pub z: u8,
-    pub p: u8,
-    pub q: u8,
-}
-
-impl DecomposedByte {
-    fn new(byte: u8) -> Self {
-        Self {
-            byte,
-            x: byte.bits(6..=7),
-            y: byte.bits(3..=5),
-            z: byte.bits(0..=2),
-            p: byte.bits(4..=5),
-            q: byte.bits(3..=3),
-        }
-    }
-}
-
+/// A type representing a CPU opcode and its operands.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Opcode {
@@ -202,8 +178,40 @@ impl Display for Opcode {
     }
 }
 
+/// Various octal digits and bits of a byte.
+///
+/// Used to algorithmically decode a CPU opcode.
+#[derive(Debug)]
+struct DecomposedByte {
+    /// The original byte
+    pub byte: u8,
+    /// The bytes's 1st octal digit (i.e., bits 6-7)
+    pub x: u8,
+    /// The bytes's 2nd octal digit (i.e., bits 3-5)
+    pub y: u8,
+    /// The bytes's 3rd octal digit (i.e., bits 0-2)
+    pub z: u8,
+    /// `y` right shifted one position (i.e., bits 4-5)
+    pub p: u8,
+    /// `y` modulo 2 (i.e., bit 3)
+    pub q: u8,
+}
+
+impl DecomposedByte {
+    fn new(byte: u8) -> Self {
+        Self {
+            byte,
+            x: byte.bits(6..=7),
+            y: byte.bits(3..=5),
+            z: byte.bits(0..=2),
+            p: byte.bits(4..=5),
+            q: byte.bits(3..=3),
+        }
+    }
+}
+
 impl Opcode {
-    /// Decode the next instruction from the given `ByteStream`
+    /// Decode the next `Opcode` from the given `ByteStream`.
     ///
     /// Returns `Err` containing the fetched byte from `ByteStream` if this byte
     /// does not correspond to any opcode.
@@ -347,6 +355,7 @@ impl Opcode {
         }
     }
 
+    /// Decode a 0xCB prefixed opcode from the given `ByteStream`.
     fn prefix_try_from<T>(stream: &mut T) -> Opcode
     where
         T: ByteStream,
@@ -372,6 +381,10 @@ impl Opcode {
     }
 }
 
+/// An 8-bit register.
+///
+/// Includes `DerefHL` variant which represents a memory access to the value contained
+/// in the 16-bit `HL` register.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Register {
@@ -416,6 +429,7 @@ impl Display for Register {
     }
 }
 
+/// A 16-bit register.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum WideRegister {
@@ -427,6 +441,10 @@ pub enum WideRegister {
 }
 
 impl WideRegister {
+    /// Decode 2-bit `value` into the appropriate 16-bit register.
+    ///
+    /// Based on the `rp` table specified at
+    /// <https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html>
     pub fn from_rp(value: u8) -> Self {
         match value {
             0 => WideRegister::BC,
@@ -437,6 +455,9 @@ impl WideRegister {
         }
     }
 
+    /// Decode 2-bit `value` into the appropriate 16-bit register.
+    /// Based on the `rp2` table specified at
+    /// <https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html>
     pub fn from_rp2(value: u8) -> Self {
         match value {
             0 => WideRegister::BC,
@@ -460,6 +481,10 @@ impl Display for WideRegister {
     }
 }
 
+/// CPU flags relevant to `Opcode`.
+///
+/// This is used to specify which flag the `Opcode` uses.  It does not indicate which
+/// flags an opcode sets or resets when the instruction is executed.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum FlagCondition {

@@ -1,4 +1,4 @@
-//! Convenient bit-twiddling operations
+//! Convenient bit-manipulation operations
 
 use std::ops::RangeInclusive;
 
