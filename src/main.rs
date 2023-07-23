@@ -2,6 +2,7 @@ use std::{fs, path::PathBuf};
 
 use clap::Parser;
 
+use qgb::mmu::ReadWriteMemory;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -17,7 +18,18 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
+    init_logger();
 
+    let rom = fs::read(&cli.program).unwrap();
+    let boot_rom = fs::read(&cli.boot_rom).unwrap();
+
+    let gb = qgb::GameBoy::new(&rom, &boot_rom).unwrap();
+    for addr in 0x0000..=0x0010 {
+        println!("{:04X}: {:02X}", addr, gb.cpu().mmu.read(addr));
+    }
+}
+
+fn init_logger() {
     if let Err(err) = tracing_subscriber::registry()
         .with(
             fmt::layer()
@@ -37,9 +49,4 @@ fn main() {
             err
         );
     }
-
-    let rom = fs::read(&cli.program).unwrap();
-    let boot_rom = fs::read(&cli.boot_rom).unwrap();
-
-    let _gb = qgb::GameBoy::new(&rom, &boot_rom).unwrap();
 }

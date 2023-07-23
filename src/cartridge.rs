@@ -1,3 +1,7 @@
+mod cartridge_base;
+mod rom_only;
+
+use std::fmt::Debug;
 use std::num::Wrapping;
 
 use crate::RomError;
@@ -10,13 +14,31 @@ const ROM_SIZE: usize = 0x0148;
 const RAM_SIZE: usize = 0x0149;
 const HEADER_CHECKSUM: usize = 0x014D;
 
-/// The `Cartridge` trait needs to be implemented for each supported cartridge type.
-pub trait Cartridge {
+const ROM_BANK_SIZE: usize = 16 * 1024;
+const RAM_BANK_SIZE: usize = 8 * 1024;
+
+/// Game cartridge
+pub type Cartridge = Box<dyn CartridgeInterface>;
+
+/// The `CartridgeInterface` trait needs to be implemented for each supported
+/// cartridge type.
+pub trait CartridgeInterface: Debug {
     fn read_rom(&self, addr: u16) -> u8;
     fn write_rom(&mut self, addr: u16, value: u8);
     fn read_ram(&self, addr: u16) -> u8;
     fn write_ram(&mut self, addr: u16, value: u8);
     fn header(&self) -> &Header;
+}
+
+pub fn new_cartridge(rom: &[u8]) -> Result<Cartridge, RomError> {
+    let header = Header::parse(rom)?;
+
+    tracing::debug!(target: "boot", cartridge_header = ?header);
+
+    match header.cartridge_type {
+        CartridgeType::RomOnly => Ok(Box::new(rom_only::RomOnly::new(rom, header)?)),
+        _ => Err(RomError::UnsupportedCartridgeType(header.cartridge_type)),
+    }
 }
 
 /// Cartridge header
@@ -27,19 +49,17 @@ pub struct Header {
     /// Cartridge type
     pub cartridge_type: CartridgeType,
     /// Number of ROM banks
-    pub rom_banks: u16,
+    pub rom_banks: usize,
     /// Number of RAM banks
-    pub ram_banks: u16,
+    pub ram_banks: usize,
     /// Header checksum
     pub checksum: u8,
     /// Header checksum matches computed value
     pub checksum_passed: bool,
 }
 
-impl TryFrom<&[u8]> for Header {
-    type Error = crate::RomError;
-
-    fn try_from(rom: &[u8]) -> Result<Self, Self::Error> {
+impl Header {
+    pub fn parse(rom: &[u8]) -> Result<Self, RomError> {
         if rom.len() < MIN_CARTRIDGE_SIZE {
             return Err(RomError::Undersized {
                 expected: MIN_CARTRIDGE_SIZE,
@@ -58,7 +78,7 @@ impl TryFrom<&[u8]> for Header {
 
         let cartridge_type = CartridgeType::try_from(rom[CARTRIDGE_TYPE])?;
 
-        let rom_banks: u16 = {
+        let rom_banks: usize = {
             if rom[ROM_SIZE] <= 0x08 {
                 2 * (1 << rom[ROM_SIZE])
             } else {
@@ -66,7 +86,7 @@ impl TryFrom<&[u8]> for Header {
             }
         };
 
-        let ram_banks: u16 = {
+        let ram_banks: usize = {
             match rom[RAM_SIZE] {
                 0x00 => 0,
                 0x02 => 1,

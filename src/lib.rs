@@ -29,6 +29,15 @@ pub enum RomError {
     UnrecognizedRomSize(u8),
     #[error("cartridge header: unrecognized RAM size ({0:02X})")]
     UnrecognizedRamSize(u8),
+    #[error("unsupported cartridge type (found '{0:?}' cartridge type)")]
+    UnsupportedCartridgeType(cartridge::CartridgeType),
+    #[error(
+        "unexpected ROM file size for cartridge type `{cartridge_type:?}' (found {found} bytes) "
+    )]
+    Oversized {
+        cartridge_type: cartridge::CartridgeType,
+        found: usize,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -39,10 +48,7 @@ pub enum BootRomError {
 
 impl GameBoy {
     pub fn new(rom: &[u8], boot_rom: &[u8]) -> Result<Self, BootError> {
-        let header = cartridge::Header::try_from(rom)?;
-        tracing::debug!(target: "boot", cartridge_header = ?header);
-
-        let mmu = mmu::Mmu::new(boot_rom)?;
+        let mmu = mmu::Mmu::new(rom, boot_rom)?;
 
         Ok(Self {
             cpu: cpu::Cpu::new(mmu),
