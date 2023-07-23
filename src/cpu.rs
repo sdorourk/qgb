@@ -3,7 +3,7 @@ pub mod opcode;
 
 use bitflags::bitflags;
 
-pub type TCycles = i64;
+use crate::mmu;
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -27,6 +27,8 @@ pub struct Cpu {
     pub sp: u16,
     /// Program counter
     pub pc: u16,
+    /// Memory management unit
+    pub mmu: mmu::Mmu,
 }
 
 bitflags! {
@@ -45,7 +47,7 @@ bitflags! {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(mmu: mmu::Mmu) -> Self {
         Self {
             a: 0,
             b: 0,
@@ -57,6 +59,7 @@ impl Cpu {
             l: 0,
             sp: 0,
             pc: 0,
+            mmu,
         }
     }
 }

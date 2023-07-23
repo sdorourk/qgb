@@ -5,7 +5,9 @@
 
 use crate::cpu::opcode::Opcode;
 
-use super::{opcode::Register, FlagsRegister, TCycles};
+use crate::TCycles;
+
+use super::{opcode::Register, FlagsRegister};
 
 /// A CPU opcode and its corresponding metadata.
 #[derive(Debug)]
