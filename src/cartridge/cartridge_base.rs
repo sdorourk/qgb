@@ -57,8 +57,8 @@ impl super::CartridgeInterface for CartridgeBase {
         }
     }
 
-    fn write_rom(&mut self, addr: u16, value: u8) {
-        tracing::warn!(target: "cartridge", "attempted to write {:02X} to memory address {:04X}: cartridge does not support writing to ROM", addr, value);
+    fn write_rom(&mut self, _addr: u16, _value: u8) {
+        tracing::warn!(target: "cartridge", "attempted to write to cartridge ROM: cartridge does not support writing to ROM");
     }
 
     fn read_ram(&self, addr: u16) -> u8 {

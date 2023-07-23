@@ -38,6 +38,8 @@ pub enum RomError {
         cartridge_type: cartridge::CartridgeType,
         found: usize,
     },
+    #[error("unexpected ROM file size (expected {expected} bytes, found {found} bytes")]
+    Size { expected: usize, found: usize },
 }
 
 #[derive(Debug, Error)]

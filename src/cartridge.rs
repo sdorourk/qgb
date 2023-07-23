@@ -32,8 +32,14 @@ pub trait CartridgeInterface: Debug {
 
 pub fn new_cartridge(rom: &[u8]) -> Result<Cartridge, RomError> {
     let header = Header::parse(rom)?;
-
     tracing::debug!(target: "boot", cartridge_header = ?header);
+
+    if header.rom_banks * ROM_BANK_SIZE != rom.len() {
+        return Err(RomError::Size {
+            expected: header.rom_banks * ROM_BANK_SIZE,
+            found: rom.len(),
+        });
+    }
 
     match header.cartridge_type {
         CartridgeType::RomOnly => Ok(Box::new(rom_only::RomOnly::new(rom, header)?)),

@@ -23,7 +23,18 @@ fn main() {
     let rom = fs::read(&cli.program).unwrap();
     let boot_rom = fs::read(&cli.boot_rom).unwrap();
 
-    let gb = qgb::GameBoy::new(&rom, &boot_rom).unwrap();
+    let gb = match qgb::GameBoy::new(&rom, &boot_rom) {
+        Ok(gb) => gb,
+        Err(qgb::BootError::BootRomError(e)) => {
+            eprintln!("'{}': {}", cli.boot_rom.display(), e);
+            return;
+        }
+        Err(qgb::BootError::RomError(e)) => {
+            eprintln!("'{}': {}", cli.boot_rom.display(), e);
+            return;
+        }
+    };
+
     for addr in 0x0000..=0x0010 {
         println!("{:04X}: {:02X}", addr, gb.cpu().mmu.read(addr));
     }
