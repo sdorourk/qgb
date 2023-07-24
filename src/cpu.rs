@@ -1,9 +1,20 @@
+mod execute;
 pub mod instruction;
 pub mod opcode;
 
+use std::cell;
+
 use bitflags::bitflags;
 
-use crate::mmu;
+use crate::{
+    mmu::{self, ReadWriteMemory},
+    TCycles,
+};
+
+use self::opcode::{Register, WideRegister};
+
+/// Number of cycles require to read or write to memory
+const DEFAULT_READ_WRITE_TCYCLES: TCycles = 4;
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -29,6 +40,9 @@ pub struct Cpu {
     pub pc: u16,
     /// Memory management unit
     pub mmu: mmu::Mmu,
+    /// Number of cycles executed by the MMU (and its components) from reading/writing
+    /// to memory while executing the current instruction
+    pub rw_cycles: cell::Cell<TCycles>,
 }
 
 bitflags! {
@@ -60,6 +74,144 @@ impl Cpu {
             sp: 0,
             pc: 0,
             mmu,
+            rw_cycles: cell::Cell::new(0),
+        }
+    }
+
+    /// Execute the next instruction.
+    ///
+    /// Returns the number of cycles required to execute the instruction.
+    pub fn step(&mut self) -> TCycles {
+        let instr = match self.fetch() {
+            Ok(instr) => instr,
+            Err(byte) => {
+                tracing::error!(target: "cpu", "unknown opcode encountered (found {:02X}", byte);
+                return DEFAULT_READ_WRITE_TCYCLES;
+            }
+        };
+
+        self.execute(instr)
+    }
+
+    pub fn fetch(&self) -> Result<instruction::Instruction, u8> {
+        let mut stream = MmuByteStream {
+            pc: self.pc,
+            mmu: &self.mmu,
+        };
+        instruction::Instruction::try_from(&mut stream)
+    }
+
+    /// Execute the given `Instruction`.
+    ///
+    /// Returns the number of cycles required to execute the instruction.
+    #[tracing::instrument(target = "cpu", level = "trace", ret)]
+    fn execute(&mut self, instr: instruction::Instruction) -> TCycles {
+        tracing::trace!(target: "cpu", "executing {}", instr.opcode);
+
+        // Increment the program counter as this is the default behavior for most operations
+        self.pc = self.pc.wrapping_add(instr.length);
+
+        // Each component should execute the number of cycles required to read the
+        // instructions operands
+        self.mmu.tick(instr.read_cycles);
+        self.rw_cycles.set(instr.read_cycles);
+
+        let total_cycles = instr.execute(self);
+
+        self.f.insert(instr.set_flags);
+        self.f.remove(instr.reset_flags);
+
+        self.mmu.tick(total_cycles - self.rw_cycles.get());
+
+        tracing::trace!(target: "cpu", cpu = ?self);
+        total_cycles
+    }
+}
+
+impl mmu::ReadWriteMemory for Cpu {
+    fn read(&self, addr: u16) -> u8 {
+        let rw_cycles = self.rw_cycles.get();
+        self.rw_cycles.set(rw_cycles + DEFAULT_READ_WRITE_TCYCLES);
+        self.mmu.read(addr)
+    }
+
+    fn write(&mut self, addr: u16, value: u8) {
+        let rw_cycles = self.rw_cycles.get();
+        self.rw_cycles.set(rw_cycles + DEFAULT_READ_WRITE_TCYCLES);
+        self.mmu.write(addr, value);
+    }
+}
+
+struct MmuByteStream<'a> {
+    pc: u16,
+    mmu: &'a mmu::Mmu,
+}
+
+impl<'a> instruction::ByteStream for MmuByteStream<'a> {
+    fn fetch(&mut self) -> u8 {
+        let old_pc = self.pc;
+        self.pc = self.pc.wrapping_add(1);
+        self.mmu.read(old_pc)
+    }
+}
+
+impl Cpu {
+    fn reg(&self, reg: Register) -> u8 {
+        match reg {
+            Register::A => self.a,
+            Register::B => self.b,
+            Register::C => self.c,
+            Register::D => self.d,
+            Register::E => self.e,
+            Register::H => self.h,
+            Register::L => self.l,
+            Register::DerefHL => self.mmu.read(self.wide_reg(WideRegister::HL)),
+        }
+    }
+
+    fn set_reg(&mut self, reg: Register, value: u8) {
+        match reg {
+            Register::A => self.a = value,
+            Register::B => self.b = value,
+            Register::C => self.c = value,
+            Register::D => self.d = value,
+            Register::E => self.e = value,
+            Register::H => self.h = value,
+            Register::L => self.l = value,
+            Register::DerefHL => self.mmu.write(self.wide_reg(WideRegister::HL), value),
+        }
+    }
+
+    fn wide_reg(&self, reg: WideRegister) -> u16 {
+        match reg {
+            WideRegister::BC => u16::from_le_bytes([self.c, self.b]),
+            WideRegister::DE => u16::from_le_bytes([self.e, self.d]),
+            WideRegister::HL => u16::from_le_bytes([self.l, self.h]),
+            WideRegister::SP => self.sp,
+            WideRegister::AF => u16::from_le_bytes([self.f.bits(), self.a]),
+        }
+    }
+
+    fn set_wide_reg(&mut self, reg: WideRegister, value: u16) {
+        let bytes = value.to_le_bytes();
+        match reg {
+            WideRegister::BC => {
+                self.c = bytes[0];
+                self.b = bytes[1];
+            }
+            WideRegister::DE => {
+                self.e = bytes[0];
+                self.d = bytes[1];
+            }
+            WideRegister::HL => {
+                self.l = bytes[0];
+                self.h = bytes[1];
+            }
+            WideRegister::SP => self.sp = value,
+            WideRegister::AF => {
+                self.f = FlagsRegister::from_bits_truncate(bytes[0]);
+                self.a = bytes[1];
+            }
         }
     }
 }

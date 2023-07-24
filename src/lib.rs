@@ -60,4 +60,12 @@ impl GameBoy {
     pub fn cpu(&self) -> &cpu::Cpu {
         &self.cpu
     }
+
+    pub fn fetch(&self) -> Result<cpu::instruction::Instruction, u8> {
+        self.cpu.fetch()
+    }
+
+    pub fn step(&mut self) -> TCycles {
+        self.cpu.step()
+    }
 }

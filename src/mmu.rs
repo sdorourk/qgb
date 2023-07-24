@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::cartridge;
 
 const BOOT_ROM_SIZE: usize = 0x0100;
@@ -41,7 +43,6 @@ const HRAM_SIZE: usize = (HRAM_END - HRAM_START + 1) as usize;
 pub const INTERRUPT_ENABLE_REG: u16 = 0xFFFF;
 
 /// Memory management unit
-#[derive(Debug)]
 pub struct Mmu {
     /// Boot ROM
     boot_rom: Box<[u8]>,
@@ -71,6 +72,18 @@ impl Mmu {
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
         })
+    }
+
+    /// Each component executes the given number of cycles
+    pub fn tick(&mut self, _cycles: crate::TCycles) {}
+}
+
+impl Debug for Mmu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mmu")
+            .field("boot_mode", &self.boot_mode)
+            .field("cartridge", &self.cartridge)
+            .finish_non_exhaustive()
     }
 }
 

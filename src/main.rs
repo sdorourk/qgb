@@ -2,7 +2,6 @@ use std::{fs, path::PathBuf};
 
 use clap::Parser;
 
-use qgb::mmu::ReadWriteMemory;
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -23,7 +22,7 @@ fn main() {
     let rom = fs::read(&cli.program).unwrap();
     let boot_rom = fs::read(&cli.boot_rom).unwrap();
 
-    let gb = match qgb::GameBoy::new(&rom, &boot_rom) {
+    let mut gb = match qgb::GameBoy::new(&rom, &boot_rom) {
         Ok(gb) => gb,
         Err(qgb::BootError::BootRomError(e)) => {
             eprintln!("'{}': {}", cli.boot_rom.display(), e);
@@ -35,8 +34,15 @@ fn main() {
         }
     };
 
-    for addr in 0x0000..=0x0010 {
-        println!("{:04X}: {:02X}", addr, gb.cpu().mmu.read(addr));
+    loop {
+        println!("{:#?}", gb.cpu());
+        println!("Instruction: {}", gb.fetch().unwrap().opcode);
+        let mut buffer = String::new();
+        std::io::stdin().read_line(&mut buffer).unwrap();
+        if buffer.trim().to_ascii_lowercase() == "exit" {
+            break;
+        }
+        gb.step();
     }
 }
 

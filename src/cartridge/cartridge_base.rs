@@ -2,10 +2,11 @@ use crate::mmu::{ROM_BANK0_END, ROM_BANK0_START, ROM_BANK1_END, ROM_BANK1_START}
 
 use super::{RAM_BANK_SIZE, ROM_BANK_SIZE};
 
+use std::fmt::Debug;
+
 const DEFAULT_READ_VALUE: u8 = 0;
 
 /// Base implementation for a game cartridge
-#[derive(Debug)]
 pub struct CartridgeBase {
     /// Cartridge ROM
     pub rom: Box<[u8]>,
@@ -37,6 +38,18 @@ impl CartridgeBase {
             ram_enabled: false,
             header,
         }
+    }
+}
+
+impl Debug for CartridgeBase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CartridgeBase")
+            .field("rom_bank0", &self.rom_bank0)
+            .field("rom_bank1", &self.rom_bank1)
+            .field("ram_bank", &self.ram_bank)
+            .field("ram_enabled", &self.ram_enabled)
+            .field("header", &self.header)
+            .finish_non_exhaustive()
     }
 }
 
