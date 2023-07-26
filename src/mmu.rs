@@ -167,12 +167,35 @@ pub trait ReadWriteMemory {
     }
 }
 
-impl ReadWriteMemory for Mmu {
-    fn read(&self, addr: u16) -> u8 {
+/// Information returned after a byte has been read from memory
+#[derive(Debug)]
+struct ReadInfo {
+    /// The value read from memory
+    value: u8, 
+    /// The mapped address
+    mapped_addr: MappedAddress,
+    /// Whether the byte was read from the boot ROM
+    boot_rom_read: bool,
+}
+
+/// Information returned after a byte has been written to memory
+#[derive(Debug)]
+struct WriteInfo {
+    /// The mapped address
+    mapped_addr: MappedAddress,
+    /// Whether the write disabled the boot ROM
+    boot_rom_disabled: bool,
+}
+
+impl Mmu {
+    /// Attempt to read from the given address.
+    /// 
+    /// Return `None` if the address could not be read from (e.g., if the address 
+    /// corresponds to a register for the CGB). 
+    fn raw_read(&self, addr: u16) -> Option<ReadInfo> {
         let mapped_addr = match MappedAddress::try_from(addr) {
             Err(_) | Ok(MappedAddress::BankReg) => {
-                tracing::error!(target: "mmu", "attempted to read from unmapped memory address ${:04X}", addr);
-                return DEFAULT_READ_VALUE;
+                return None;
             }
             Ok(mapped_addr) => mapped_addr,
         };
@@ -202,26 +225,22 @@ impl ReadWriteMemory for Mmu {
             MappedAddress::Interrupt => todo!(),
         };
 
-        if tracing::enabled!(target: "mmu", tracing::Level::TRACE) {
-            let mapped_to = if boot_rom_read {
-                "BootRom".to_string()
-            } else {
-                format!("{:?}", mapped_addr)
-            };
-            tracing::trace!(target: "mmu", "read ${value:02X} from memory address ${addr:04X} (mapped to {})", mapped_to);
-        }
-        value
+        Some(ReadInfo { value, mapped_addr, boot_rom_read })
     }
 
-    fn write(&mut self, addr: u16, value: u8) {
+    /// Attempt to write to the given address.
+    /// 
+    /// Return `Err` if the address can not be written to (e.g., if the address corresponds
+    /// to a register for the CGB). 
+    fn raw_write(&mut self, addr: u16, value: u8) -> Result<WriteInfo, ()> {
         let mapped_addr = match MappedAddress::try_from(addr) {
             Ok(mapped_addr) => mapped_addr,
             Err(_) => {
-                tracing::error!(target: "mmu", "attempted to write to unmapped memory address ${:04X}", addr);
-                return;
+                return Err(());
             }
         };
-        tracing::trace!(target: "mmu", "wrote ${value:02X} to memory address ${addr:04X} (mapped to {:?})", mapped_addr);
+
+        let mut boot_rom_disabled = false;
 
         match mapped_addr {
             MappedAddress::CartridgeRom => self.cartridge.write_rom(addr, value),
@@ -237,11 +256,48 @@ impl ReadWriteMemory for Mmu {
             MappedAddress::BankReg => {
                 if value != 0 {
                     self.boot_mode = false;
-                    tracing::trace!(target: "mmu", "boot mode disabled")
+                    boot_rom_disabled = true;
                 }
             }
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)] = value,
             MappedAddress::Interrupt => todo!(),
+        };
+        Ok(WriteInfo { mapped_addr, boot_rom_disabled, })
+    }
+}
+
+impl ReadWriteMemory for Mmu {
+    fn read(&self, addr: u16) -> u8 {
+        match self.raw_read(addr) {
+            Some(info) => {
+                if tracing::enabled!(target: "mmu", tracing::Level::TRACE) {
+                    let mapped_to = if info.boot_rom_read {
+                        "BootRom".to_string()
+                    } else {
+                        format!("{:?}", info.mapped_addr)
+                    };
+                    tracing::trace!(target: "mmu", "read ${:02X} from memory address ${addr:04X} (mapped to {})", info.value, mapped_to);
+                }
+                info.value
+            },
+            None => {
+                tracing::error!(target: "mmu", "attempted to read from unmapped memory address ${:04X}", addr);
+                DEFAULT_READ_VALUE
+            }
+        }
+    }
+
+    fn write(&mut self, addr: u16, value: u8) {
+        match self.raw_write(addr, value) {
+            Ok(info) => {
+                tracing::trace!(target: "mmu", "wrote ${value:02X} to memory address ${addr:04X} (mapped to {:?})", info.mapped_addr);
+                if info.boot_rom_disabled {
+                    tracing::trace!(target: "mmu", "boot mode disabled")
+                }
+            },
+            Err(()) => {
+                tracing::error!(target: "mmu", "attempted to write to unmapped memory address ${:04X}", addr);
+            }
         }
     }
 }
