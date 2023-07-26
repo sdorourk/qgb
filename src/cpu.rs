@@ -2,8 +2,6 @@ mod execute;
 pub mod instruction;
 pub mod opcode;
 
-use std::cell;
-
 use bitflags::bitflags;
 
 use crate::{
@@ -13,8 +11,11 @@ use crate::{
 
 use self::opcode::{Register, WideRegister};
 
-/// Number of cycles require to read or write to memory
-const DEFAULT_READ_WRITE_TCYCLES: TCycles = 4;
+/// Number of cycles required to read or write a byte from memory
+const DEFAULT_READ_WRITE_CYCLES: TCycles = 4;
+
+/// Number of cycles required to read or write two bytes from memory
+const DEFAULT_READ_WRITE_U16_CYCLES: TCycles = DEFAULT_READ_WRITE_CYCLES * 2;
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -42,7 +43,7 @@ pub struct Cpu {
     pub mmu: mmu::Mmu,
     /// Number of cycles executed by the MMU (and its components) from reading/writing
     /// to memory while executing the current instruction
-    pub rw_cycles: cell::Cell<TCycles>,
+    pub rw_cycles: TCycles,
 }
 
 bitflags! {
@@ -74,7 +75,7 @@ impl Cpu {
             sp: 0,
             pc: 0,
             mmu,
-            rw_cycles: cell::Cell::new(0),
+            rw_cycles: 0,
         }
     }
 
@@ -86,7 +87,7 @@ impl Cpu {
             Ok(instr) => instr,
             Err(byte) => {
                 tracing::error!(target: "cpu", "unknown opcode encountered (found {:02X}", byte);
-                return DEFAULT_READ_WRITE_TCYCLES;
+                return DEFAULT_READ_WRITE_CYCLES;
             }
         };
 
@@ -114,31 +115,45 @@ impl Cpu {
         // Each component should execute the number of cycles required to read the
         // instructions operands
         self.mmu.tick(instr.read_cycles);
-        self.rw_cycles.set(instr.read_cycles);
+        self.rw_cycles = instr.read_cycles;
 
         let total_cycles = instr.execute(self);
 
         self.f.insert(instr.set_flags);
         self.f.remove(instr.reset_flags);
 
-        self.mmu.tick(total_cycles - self.rw_cycles.get());
+        self.mmu.tick(total_cycles - self.rw_cycles);
 
         tracing::trace!(target: "cpu", cpu = ?self);
         total_cycles
     }
 }
 
-impl mmu::ReadWriteMemory for Cpu {
-    fn read(&self, addr: u16) -> u8 {
-        let rw_cycles = self.rw_cycles.get();
-        self.rw_cycles.set(rw_cycles + DEFAULT_READ_WRITE_TCYCLES);
-        self.mmu.read(addr)
+impl Cpu {
+    fn read(&mut self, addr: u16) -> u8 {
+        let value = self.mmu.read(addr);
+        self.rw_cycles += DEFAULT_READ_WRITE_CYCLES;
+        self.mmu.tick(DEFAULT_READ_WRITE_CYCLES);
+        value
     }
 
     fn write(&mut self, addr: u16, value: u8) {
-        let rw_cycles = self.rw_cycles.get();
-        self.rw_cycles.set(rw_cycles + DEFAULT_READ_WRITE_TCYCLES);
         self.mmu.write(addr, value);
+        self.rw_cycles += DEFAULT_READ_WRITE_CYCLES;
+        self.mmu.tick(DEFAULT_READ_WRITE_CYCLES);
+    }
+
+    fn read_u16(&mut self, addr: u16) -> u16 {
+        let value = self.mmu.read_u16(addr);
+        self.rw_cycles += DEFAULT_READ_WRITE_U16_CYCLES;
+        self.mmu.tick(DEFAULT_READ_WRITE_U16_CYCLES);
+        value
+    }
+
+    fn write_u16(&mut self, addr: u16, value: u16) {
+        self.mmu.write_u16(addr, value);
+        self.rw_cycles += DEFAULT_READ_WRITE_U16_CYCLES;
+        self.mmu.tick(DEFAULT_READ_WRITE_U16_CYCLES);
     }
 }
 
@@ -156,7 +171,7 @@ impl<'a> instruction::ByteStream for MmuByteStream<'a> {
 }
 
 impl Cpu {
-    fn reg(&self, reg: Register) -> u8 {
+    fn reg(&mut self, reg: Register) -> u8 {
         match reg {
             Register::A => self.a,
             Register::B => self.b,
@@ -165,7 +180,7 @@ impl Cpu {
             Register::E => self.e,
             Register::H => self.h,
             Register::L => self.l,
-            Register::DerefHL => self.mmu.read(self.wide_reg(WideRegister::HL)),
+            Register::DerefHL => self.read(self.wide_reg(WideRegister::HL)),
         }
     }
 
@@ -178,7 +193,7 @@ impl Cpu {
             Register::E => self.e = value,
             Register::H => self.h = value,
             Register::L => self.l = value,
-            Register::DerefHL => self.mmu.write(self.wide_reg(WideRegister::HL), value),
+            Register::DerefHL => self.write(self.wide_reg(WideRegister::HL), value),
         }
     }
 
