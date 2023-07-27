@@ -176,11 +176,14 @@ where
     }
 }
 
+/// `ByteStream` implementation for the MMU
 struct MmuByteStream<'a, T>
 where
     T: ReadWriteMemory,
 {
+    /// Program counter
     pc: u16,
+    /// Memory management unit to read bytes from
     mmu: &'a T,
 }
 
