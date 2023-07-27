@@ -1,4 +1,5 @@
-#[allow(clippy::module_inception)]
+#![allow(clippy::module_inception)]
+pub mod dummy_mmu;
 mod mmu;
 mod traits;
 
