@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::cartridge;
+use crate::{cartridge, TCycles};
 
 const BOOT_ROM_SIZE: usize = 0x0100;
 
@@ -73,9 +73,6 @@ impl Mmu {
             wram: [0; WRAM_SIZE],
         })
     }
-
-    /// Each component executes the given number of cycles
-    pub fn tick(&mut self, _cycles: crate::TCycles) {}
 }
 
 impl Debug for Mmu {
@@ -167,14 +164,21 @@ pub trait ReadWriteMemory {
     }
 }
 
+/// The `Tick` trait is used to synchronizes cycle timing in the system.
+pub trait Tick {
+    /// Notify the system components that the `Cpu` has executed the given number
+    /// of cycles.
+    fn tick(&mut self, cycles: TCycles);
+}
+
 /// Information returned after a byte has been read from memory
 #[derive(Debug)]
 struct ReadInfo {
     /// The value read from memory
-    value: u8, 
+    value: u8,
     /// The mapped address
     mapped_addr: MappedAddress,
-    /// Whether the byte was read from the boot ROM
+    /// Byte read from the boot ROM
     boot_rom_read: bool,
 }
 
@@ -183,15 +187,15 @@ struct ReadInfo {
 struct WriteInfo {
     /// The mapped address
     mapped_addr: MappedAddress,
-    /// Whether the write disabled the boot ROM
+    /// Write disabled the boot ROM
     boot_rom_disabled: bool,
 }
 
 impl Mmu {
     /// Attempt to read from the given address.
-    /// 
-    /// Return `None` if the address could not be read from (e.g., if the address 
-    /// corresponds to a register for the CGB). 
+    ///
+    /// Return `None` if the address could not be read from (e.g., if the address
+    /// corresponds to a register for the CGB).
     fn raw_read(&self, addr: u16) -> Option<ReadInfo> {
         let mapped_addr = match MappedAddress::try_from(addr) {
             Err(_) | Ok(MappedAddress::BankReg) => {
@@ -225,13 +229,17 @@ impl Mmu {
             MappedAddress::Interrupt => todo!(),
         };
 
-        Some(ReadInfo { value, mapped_addr, boot_rom_read })
+        Some(ReadInfo {
+            value,
+            mapped_addr,
+            boot_rom_read,
+        })
     }
 
     /// Attempt to write to the given address.
-    /// 
+    ///
     /// Return `Err` if the address can not be written to (e.g., if the address corresponds
-    /// to a register for the CGB). 
+    /// to a register for the CGB).
     fn raw_write(&mut self, addr: u16, value: u8) -> Result<WriteInfo, ()> {
         let mapped_addr = match MappedAddress::try_from(addr) {
             Ok(mapped_addr) => mapped_addr,
@@ -262,7 +270,10 @@ impl Mmu {
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)] = value,
             MappedAddress::Interrupt => todo!(),
         };
-        Ok(WriteInfo { mapped_addr, boot_rom_disabled, })
+        Ok(WriteInfo {
+            mapped_addr,
+            boot_rom_disabled,
+        })
     }
 }
 
@@ -279,7 +290,7 @@ impl ReadWriteMemory for Mmu {
                     tracing::trace!(target: "mmu", "read ${:02X} from memory address ${addr:04X} (mapped to {})", info.value, mapped_to);
                 }
                 info.value
-            },
+            }
             None => {
                 tracing::error!(target: "mmu", "attempted to read from unmapped memory address ${:04X}", addr);
                 DEFAULT_READ_VALUE
@@ -294,10 +305,14 @@ impl ReadWriteMemory for Mmu {
                 if info.boot_rom_disabled {
                     tracing::trace!(target: "mmu", "boot mode disabled")
                 }
-            },
+            }
             Err(()) => {
                 tracing::error!(target: "mmu", "attempted to write to unmapped memory address ${:04X}", addr);
             }
         }
     }
+}
+
+impl Tick for Mmu {
+    fn tick(&mut self, _cycles: TCycles) {}
 }

@@ -5,7 +5,7 @@ pub mod opcode;
 use bitflags::bitflags;
 
 use crate::{
-    mmu::{self, ReadWriteMemory},
+    mmu::{self, ReadWriteMemory, Tick},
     TCycles,
 };
 
