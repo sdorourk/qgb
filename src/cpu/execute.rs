@@ -1,9 +1,17 @@
-use crate::TCycles;
+use std::fmt::Debug;
+
+use crate::{
+    mmu::{ReadWriteMemory, Tick},
+    TCycles,
+};
 
 use super::{instruction::Instruction, opcode::Opcode, Cpu};
 
 impl Instruction {
-    pub(super) fn execute(&self, _cpu: &mut Cpu) -> TCycles {
+    pub(super) fn execute<T>(&self, _cpu: &mut Cpu<T>) -> TCycles
+    where
+        T: Debug + ReadWriteMemory + Tick,
+    {
         match self.opcode {
             Opcode::Nop => self.cycles,
             // Opcode::LdDerefImmSp(_) => todo!(),

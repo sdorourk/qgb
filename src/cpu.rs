@@ -2,10 +2,12 @@ mod execute;
 pub mod instruction;
 pub mod opcode;
 
+use std::fmt::Debug;
+
 use bitflags::bitflags;
 
 use crate::{
-    mmu::{self, ReadWriteMemory, Tick},
+    mmu::{ReadWriteMemory, Tick},
     TCycles,
 };
 
@@ -18,7 +20,10 @@ const DEFAULT_READ_WRITE_CYCLES: TCycles = 4;
 const DEFAULT_READ_WRITE_U16_CYCLES: TCycles = DEFAULT_READ_WRITE_CYCLES * 2;
 
 #[derive(Debug)]
-pub struct Cpu {
+pub struct Cpu<T>
+where
+    T: Debug,
+{
     /// Register A
     pub a: u8,
     /// Register B
@@ -40,7 +45,7 @@ pub struct Cpu {
     /// Program counter
     pub pc: u16,
     /// Memory management unit
-    pub mmu: mmu::Mmu,
+    pub mmu: T,
     /// Number of cycles executed by the MMU (and its components) from reading/writing
     /// to memory while executing the current instruction
     pub rw_cycles: TCycles,
@@ -61,8 +66,11 @@ bitflags! {
     }
 }
 
-impl Cpu {
-    pub fn new(mmu: mmu::Mmu) -> Self {
+impl<T> Cpu<T>
+where
+    T: Debug,
+{
+    pub fn new(mmu: T) -> Self {
         Self {
             a: 0,
             b: 0,
@@ -78,7 +86,11 @@ impl Cpu {
             rw_cycles: 0,
         }
     }
-
+}
+impl<T> Cpu<T>
+where
+    T: Debug + ReadWriteMemory + Tick,
+{
     /// Execute the next instruction.
     ///
     /// Returns the number of cycles required to execute the instruction.
@@ -101,7 +113,12 @@ impl Cpu {
         };
         instruction::Instruction::try_from(&mut stream)
     }
+}
 
+impl<T> Cpu<T>
+where
+    T: Debug + ReadWriteMemory + Tick,
+{
     /// Execute the given `Instruction`.
     ///
     /// Returns the number of cycles required to execute the instruction.
@@ -129,7 +146,10 @@ impl Cpu {
     }
 }
 
-impl Cpu {
+impl<T> Cpu<T>
+where
+    T: Debug + ReadWriteMemory + Tick,
+{
     fn read(&mut self, addr: u16) -> u8 {
         let value = self.mmu.read(addr);
         self.rw_cycles += DEFAULT_READ_WRITE_CYCLES;
@@ -157,12 +177,18 @@ impl Cpu {
     }
 }
 
-struct MmuByteStream<'a> {
+struct MmuByteStream<'a, T>
+where
+    T: ReadWriteMemory,
+{
     pc: u16,
-    mmu: &'a mmu::Mmu,
+    mmu: &'a T,
 }
 
-impl<'a> instruction::ByteStream for MmuByteStream<'a> {
+impl<'a, T> instruction::ByteStream for MmuByteStream<'a, T>
+where
+    T: ReadWriteMemory,
+{
     fn fetch(&mut self) -> u8 {
         let old_pc = self.pc;
         self.pc = self.pc.wrapping_add(1);
@@ -170,7 +196,10 @@ impl<'a> instruction::ByteStream for MmuByteStream<'a> {
     }
 }
 
-impl Cpu {
+impl<T> Cpu<T>
+where
+    T: Debug + ReadWriteMemory + Tick,
+{
     fn reg(&mut self, reg: Register) -> u8 {
         match reg {
             Register::A => self.a,

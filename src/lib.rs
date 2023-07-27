@@ -8,7 +8,7 @@ use thiserror::Error;
 pub type TCycles = i64;
 
 pub struct GameBoy {
-    pub(crate) cpu: cpu::Cpu,
+    pub(crate) cpu: cpu::Cpu<mmu::Mmu>,
 }
 
 #[derive(Debug, Error)]
@@ -57,7 +57,7 @@ impl GameBoy {
         })
     }
 
-    pub fn cpu(&self) -> &cpu::Cpu {
+    pub fn cpu(&self) -> &cpu::Cpu<mmu::Mmu> {
         &self.cpu
     }
 
