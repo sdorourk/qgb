@@ -1,9 +1,11 @@
 mod bits;
 pub mod cartridge;
+mod components;
 pub mod cpu;
-pub mod mmu;
 
 use thiserror::Error;
+
+use components::mmu;
 
 pub type TCycles = i64;
 
