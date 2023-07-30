@@ -1,8 +1,7 @@
 use std::{
-    collections::HashSet,
     fs,
     io::{self, Write},
-    path::PathBuf,
+    path::PathBuf, str::FromStr,
 };
 
 use clap::Parser;
@@ -76,7 +75,6 @@ fn init_logger() {
 
 struct Debugger {
     gb: qgb::GameBoy,
-    break_points: HashSet<u16>,
 }
 
 #[derive(Debug)]
@@ -87,11 +85,14 @@ enum Command {
     Exit,
 }
 
-impl TryFrom<String> for Command {
-    type Error = String;
+impl FromStr for Command {
+    type Err = String;
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let cmd: Vec<String> = value
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !s.is_ascii() {
+            return Err("Invalid command".into());
+        }
+        let cmd: Vec<String> = s
             .trim()
             .to_lowercase()
             .split_whitespace()
@@ -126,7 +127,6 @@ impl Debugger {
     pub fn new(gb: qgb::GameBoy) -> Self {
         Self {
             gb,
-            break_points: HashSet::new(),
         }
     }
 
@@ -139,7 +139,7 @@ impl Debugger {
 
             let mut buffer = String::new();
             io::stdin().read_line(&mut buffer).unwrap();
-            let cmd = match Command::try_from(buffer) {
+            let cmd = match buffer.parse() {
                 Ok(cmd) => cmd,
                 Err(msg) => {
                     println!("{}", msg);
