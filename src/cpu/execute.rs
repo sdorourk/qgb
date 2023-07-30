@@ -1,37 +1,121 @@
 use std::fmt::Debug;
 
 use crate::{
+    bits::Bits,
     mmu::{ReadWriteMemory, Tick},
     TCycles,
 };
 
-use super::{instruction::Instruction, opcode::Opcode, Cpu};
+use super::{
+    instruction::Instruction,
+    opcode::{Opcode, Register, WideRegister},
+    Cpu, FlagsRegister,
+};
 
 impl Instruction {
-    pub(super) fn execute<T>(&self, _cpu: &mut Cpu<T>) -> TCycles
+    pub(super) fn execute<T>(&self, cpu: &mut Cpu<T>) -> TCycles
     where
         T: Debug + ReadWriteMemory + Tick,
     {
         match self.opcode {
             Opcode::Nop => self.cycles,
-            // Opcode::LdDerefImmSp(_) => todo!(),
-            // Opcode::Stop => todo!(),
-            // Opcode::Jr(_) => todo!(),
-            // Opcode::JrCond(_, _) => todo!(),
-            // Opcode::LdWideRegImm(_, _) => todo!(),
-            // Opcode::AddHLWideReg(_) => todo!(),
-            // Opcode::LdDerefWideRegA(_) => todo!(),
-            // Opcode::LdADerefWideReg(_) => todo!(),
-            // Opcode::LdHLIncA => todo!(),
-            // Opcode::LdHLDecA => todo!(),
-            // Opcode::LdAHLInc => todo!(),
-            // Opcode::LdAHLDec => todo!(),
-            // Opcode::IncWideReg(_) => todo!(),
-            // Opcode::DecWideReg(_) => todo!(),
-            // Opcode::IncReg(_) => todo!(),
-            // Opcode::DecReg(_) => todo!(),
-            // Opcode::LdRegImm(_, _) => todo!(),
-            // Opcode::Rlca => todo!(),
+            Opcode::LdDerefImmSp(addr) => {
+                cpu.sp = addr;
+                self.cycles
+            }
+            Opcode::Stop => {
+                tracing::warn!(target: "cpu", "STOP instruction is not supported");
+                self.cycles
+            }
+            Opcode::Jr(offset) => {
+                cpu.pc = cpu.pc.wrapping_sub(self.length);
+                cpu.pc = cpu.pc.wrapping_add_signed(i16::from(offset));
+                self.cycles
+            }
+            Opcode::JrCond(cond, offset) => {
+                if cpu.condition(cond) {
+                    cpu.pc = cpu.pc.wrapping_sub(self.length);
+                    cpu.pc = cpu.pc.wrapping_add_signed(i16::from(offset));
+                    self.branch_cycles
+                } else {
+                    self.cycles
+                }
+            }
+            Opcode::LdWideRegImm(reg, value) => {
+                cpu.set_wide_reg(reg, value);
+                self.cycles
+            }
+            Opcode::AddHLWideReg(reg) => {
+                let sum = cpu.add_wide(WideRegister::HL, reg);
+                cpu.set_wide_reg(WideRegister::HL, sum);
+                self.cycles
+            }
+            Opcode::LdDerefWideRegA(reg) => {
+                let addr = cpu.wide_reg(reg);
+                cpu.write(addr, cpu.a);
+                self.cycles
+            }
+            Opcode::LdADerefWideReg(reg) => {
+                let addr = cpu.wide_reg(reg);
+                let value = cpu.read(addr);
+                cpu.set_reg(Register::A, value);
+                self.cycles
+            }
+            Opcode::LdHLIncA => {
+                let value = cpu.reg(Register::A);
+                cpu.set_reg(Register::DerefHL, value);
+                cpu.inc_wide(WideRegister::HL);
+                self.cycles
+            }
+            Opcode::LdHLDecA => {
+                let value = cpu.reg(Register::A);
+                cpu.set_reg(Register::DerefHL, value);
+                cpu.dec_wide(WideRegister::HL);
+                self.cycles
+            }
+            Opcode::LdAHLInc => {
+                let value = cpu.reg(Register::DerefHL);
+                cpu.set_reg(Register::A, value);
+                cpu.inc_wide(WideRegister::HL);
+                self.cycles
+            }
+            Opcode::LdAHLDec => {
+                let value = cpu.reg(Register::DerefHL);
+                cpu.set_reg(Register::A, value);
+                cpu.dec_wide(WideRegister::HL);
+                self.cycles
+            }
+            Opcode::IncWideReg(reg) => {
+                cpu.inc_wide(reg);
+                self.cycles
+            }
+            Opcode::DecWideReg(reg) => {
+                cpu.dec_wide(reg);
+                self.cycles
+            }
+            Opcode::IncReg(reg) => {
+                cpu.inc(reg);
+                self.cycles
+            }
+            Opcode::DecReg(reg) => {
+                cpu.dec(reg);
+                self.cycles
+            }
+            Opcode::LdRegImm(reg, n) => {
+                cpu.set_reg(reg, n);
+                self.cycles
+            }
+            Opcode::Rlca => {
+                let mut value = cpu.reg(Register::A);
+                let carry = value.bit(7);
+                value <<= 1;
+                if carry {
+                    value.set_bit(0);
+                }
+                cpu.set_reg(Register::A, value);
+                cpu.f.set(FlagsRegister::C, carry);
+                self.cycles
+            }
             // Opcode::Rrca => todo!(),
             // Opcode::Rla => todo!(),
             // Opcode::Rra => todo!(),
@@ -39,7 +123,11 @@ impl Instruction {
             // Opcode::Cpl => todo!(),
             // Opcode::Scf => todo!(),
             // Opcode::Ccf => todo!(),
-            // Opcode::Ld(_, _) => todo!(),
+            Opcode::Ld(reg1, reg2) => {
+                let value = cpu.reg(reg2);
+                cpu.set_reg(reg1, value);
+                self.cycles
+            }
             // Opcode::Halt => todo!(),
             // Opcode::Add(_) => todo!(),
             // Opcode::Adc(_) => todo!(),

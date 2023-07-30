@@ -496,7 +496,6 @@ mod test {
 
     #[test]
     pub fn decode_instructions() {
-        // TODO: Add remaining opcodes
         let rom = vec![
             0x00, // NOP
             0x08, // LD $FF10, SP

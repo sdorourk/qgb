@@ -3,6 +3,8 @@
 //! This implementation stores a large memory buffer that it reads and writes to.  It does
 //! not implement any components or memory mapped registers.
 
+use std::fmt::Debug;
+
 use super::*;
 
 const MEMORY_SIZE: usize = u16::MAX as usize;
@@ -36,4 +38,10 @@ impl ReadWriteMemory for DummyMmu {
 
 impl Tick for DummyMmu {
     fn tick(&mut self, _cycles: crate::TCycles) {}
+}
+
+impl Debug for DummyMmu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DummyMmu").finish_non_exhaustive()
+    }
 }

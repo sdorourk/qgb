@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     instruction,
-    opcode::{Register, WideRegister},
+    opcode::{FlagCondition, Register, WideRegister},
 };
 
 /// Number of cycles required to read or write a byte from memory
@@ -34,7 +34,7 @@ where
     /// Register E
     pub e: u8,
     /// Flags register
-    f: FlagsRegister,
+    pub(super) f: FlagsRegister,
     /// Register H
     pub h: u8,
     /// Register L
@@ -138,6 +138,7 @@ where
         self.f.insert(instr.set_flags);
         self.f.remove(instr.reset_flags);
 
+        assert!(total_cycles >= self.rw_cycles);
         self.mmu.tick(total_cycles - self.rw_cycles);
 
         tracing::trace!(target: "cpu", cpu = ?self);
@@ -149,27 +150,27 @@ impl<T> Cpu<T>
 where
     T: Debug + ReadWriteMemory + Tick,
 {
-    fn read(&mut self, addr: u16) -> u8 {
+    pub(super) fn read(&mut self, addr: u16) -> u8 {
         let value = self.mmu.read(addr);
         self.rw_cycles += DEFAULT_READ_WRITE_CYCLES;
         self.mmu.tick(DEFAULT_READ_WRITE_CYCLES);
         value
     }
 
-    fn write(&mut self, addr: u16, value: u8) {
+    pub(super) fn write(&mut self, addr: u16, value: u8) {
         self.mmu.write(addr, value);
         self.rw_cycles += DEFAULT_READ_WRITE_CYCLES;
         self.mmu.tick(DEFAULT_READ_WRITE_CYCLES);
     }
 
-    fn read_u16(&mut self, addr: u16) -> u16 {
+    pub(super) fn read_u16(&mut self, addr: u16) -> u16 {
         let value = self.mmu.read_u16(addr);
         self.rw_cycles += DEFAULT_READ_WRITE_U16_CYCLES;
         self.mmu.tick(DEFAULT_READ_WRITE_U16_CYCLES);
         value
     }
 
-    fn write_u16(&mut self, addr: u16, value: u16) {
+    pub(super) fn write_u16(&mut self, addr: u16, value: u16) {
         self.mmu.write_u16(addr, value);
         self.rw_cycles += DEFAULT_READ_WRITE_U16_CYCLES;
         self.mmu.tick(DEFAULT_READ_WRITE_U16_CYCLES);
@@ -202,7 +203,7 @@ impl<T> Cpu<T>
 where
     T: Debug + ReadWriteMemory + Tick,
 {
-    fn reg(&mut self, reg: Register) -> u8 {
+    pub(super) fn reg(&mut self, reg: Register) -> u8 {
         match reg {
             Register::A => self.a,
             Register::B => self.b,
@@ -215,7 +216,7 @@ where
         }
     }
 
-    fn set_reg(&mut self, reg: Register, value: u8) {
+    pub(super) fn set_reg(&mut self, reg: Register, value: u8) {
         match reg {
             Register::A => self.a = value,
             Register::B => self.b = value,
@@ -228,7 +229,7 @@ where
         }
     }
 
-    fn wide_reg(&self, reg: WideRegister) -> u16 {
+    pub(super) fn wide_reg(&self, reg: WideRegister) -> u16 {
         match reg {
             WideRegister::BC => u16::from_le_bytes([self.c, self.b]),
             WideRegister::DE => u16::from_le_bytes([self.e, self.d]),
@@ -238,7 +239,7 @@ where
         }
     }
 
-    fn set_wide_reg(&mut self, reg: WideRegister, value: u16) {
+    pub(super) fn set_wide_reg(&mut self, reg: WideRegister, value: u16) {
         let bytes = value.to_le_bytes();
         match reg {
             WideRegister::BC => {
@@ -258,6 +259,15 @@ where
                 self.f = FlagsRegister::from_bits_truncate(bytes[0]);
                 self.a = bytes[1];
             }
+        }
+    }
+
+    pub(super) fn condition(&self, cond: FlagCondition) -> bool {
+        match cond {
+            FlagCondition::NZ => !self.f.contains(FlagsRegister::Z),
+            FlagCondition::Z => self.f.contains(FlagsRegister::Z),
+            FlagCondition::NC => !self.f.contains(FlagsRegister::C),
+            FlagCondition::C => self.f.contains(FlagsRegister::C),
         }
     }
 }
