@@ -1,7 +1,8 @@
 use std::{
     fs,
     io::{self, Write},
-    path::PathBuf, str::FromStr,
+    path::PathBuf,
+    str::FromStr,
 };
 
 use clap::Parser;
@@ -25,15 +26,6 @@ fn main() {
 
     let rom = fs::read(&cli.program).unwrap();
     let boot_rom = fs::read(&cli.boot_rom).unwrap();
-
-    let rom = vec![
-        0x04, // INC B
-        0x2B, // DEC HL
-        0x05, // DEC B
-        0x05, // DEC B
-        0x06, // LD B, $10
-        0x10,
-    ];
 
     let gb = match qgb::GameBoy::new(&rom, &boot_rom) {
         Ok(gb) => gb,
@@ -125,9 +117,7 @@ impl FromStr for Command {
 
 impl Debugger {
     pub fn new(gb: qgb::GameBoy) -> Self {
-        Self {
-            gb,
-        }
+        Self { gb }
     }
 
     pub fn start(&mut self) {

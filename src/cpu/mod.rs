@@ -1,4 +1,4 @@
-#[allow(clippy::module_inception)]
+#![allow(clippy::module_inception)]
 mod alu;
 pub mod cpu;
 mod execute;

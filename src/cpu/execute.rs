@@ -46,8 +46,7 @@ impl Instruction {
                 self.cycles
             }
             Opcode::AddHLWideReg(reg) => {
-                let sum = cpu.add_wide(WideRegister::HL, reg);
-                cpu.set_wide_reg(WideRegister::HL, sum);
+                cpu.add_wide(WideRegister::HL, reg);
                 self.cycles
             }
             Opcode::LdDerefWideRegA(reg) => {
@@ -106,78 +105,278 @@ impl Instruction {
                 self.cycles
             }
             Opcode::Rlca => {
-                let mut value = cpu.reg(Register::A);
-                let carry = value.bit(7);
-                value <<= 1;
-                if carry {
-                    value.set_bit(0);
-                }
-                cpu.set_reg(Register::A, value);
-                cpu.f.set(FlagsRegister::C, carry);
+                cpu.rlc(Register::A, false);
                 self.cycles
             }
-            // Opcode::Rrca => todo!(),
-            // Opcode::Rla => todo!(),
-            // Opcode::Rra => todo!(),
-            // Opcode::Daa => todo!(),
-            // Opcode::Cpl => todo!(),
-            // Opcode::Scf => todo!(),
-            // Opcode::Ccf => todo!(),
+            Opcode::Rrca => {
+                cpu.rrc(Register::A, false);
+                self.cycles
+            }
+            Opcode::Rla => {
+                cpu.rl(Register::A, false);
+                self.cycles
+            }
+            Opcode::Rra => {
+                cpu.rr(Register::A, false);
+                self.cycles
+            }
+            Opcode::Daa => {
+                let mut value = cpu.reg(Register::A);
+                if !cpu.f.intersects(FlagsRegister::N) {
+                    if cpu.f.intersects(FlagsRegister::C) || value > 0x99 {
+                        value = value.wrapping_add(0x60);
+                        cpu.f.insert(FlagsRegister::C);
+                    }
+                    if cpu.f.intersects(FlagsRegister::H) || (value & 0x0F) > 0x09 {
+                        value = value.wrapping_add(0x06);
+                    }
+                } else {
+                    if cpu.f.intersects(FlagsRegister::C) {
+                        value = value.wrapping_sub(0x60);
+                    }
+                    if cpu.f.intersects(FlagsRegister::H) {
+                        value = value.wrapping_sub(0x06);
+                    }
+                }
+                cpu.set_reg(Register::A, value);
+                cpu.f.set(FlagsRegister::Z, value == 0);
+                self.cycles
+            }
+            Opcode::Cpl => {
+                let mut value = cpu.reg(Register::A);
+                value = !value;
+                cpu.set_reg(Register::A, value);
+                self.cycles
+            }
+            Opcode::Scf => self.cycles,
+            Opcode::Ccf => {
+                cpu.f.toggle(FlagsRegister::C);
+                self.cycles
+            }
             Opcode::Ld(reg1, reg2) => {
                 let value = cpu.reg(reg2);
                 cpu.set_reg(reg1, value);
                 self.cycles
             }
             // Opcode::Halt => todo!(),
-            // Opcode::Add(_) => todo!(),
-            // Opcode::Adc(_) => todo!(),
-            // Opcode::Sub(_) => todo!(),
-            // Opcode::Sbc(_) => todo!(),
-            // Opcode::And(_) => todo!(),
-            // Opcode::Xor(_) => todo!(),
-            // Opcode::Or(_) => todo!(),
-            // Opcode::Cp(_) => todo!(),
-            // Opcode::RetCond(_) => todo!(),
-            // Opcode::LdOffsetImmA(_) => todo!(),
+            Opcode::Add(reg) => {
+                let value = cpu.reg(reg);
+                cpu.add(value);
+                self.cycles
+            }
+            Opcode::Adc(reg) => {
+                let value = cpu.reg(reg);
+                cpu.adc(value);
+                self.cycles
+            }
+            Opcode::Sub(reg) => {
+                let value = cpu.reg(reg);
+                cpu.sub(value);
+                self.cycles
+            }
+            Opcode::Sbc(reg) => {
+                let value = cpu.reg(reg);
+                cpu.sbc(value);
+                self.cycles
+            }
+            Opcode::And(reg) => {
+                let value = cpu.reg(reg);
+                cpu.and(value);
+                self.cycles
+            }
+            Opcode::Xor(reg) => {
+                let value = cpu.reg(reg);
+                cpu.xor(value);
+                self.cycles
+            }
+            Opcode::Or(reg) => {
+                let value = cpu.reg(reg);
+                cpu.or(value);
+                self.cycles
+            }
+            Opcode::Cp(reg) => {
+                let value = cpu.reg(reg);
+                cpu.cp(value);
+                self.cycles
+            }
+            Opcode::RetCond(cond) => {
+                if cpu.condition(cond) {
+                    cpu.ret();
+                    self.branch_cycles
+                } else {
+                    self.cycles
+                }
+            }
+            Opcode::LdOffsetImmA(offset) => {
+                let value = cpu.reg(Register::A);
+                cpu.write(0xFF00 + u16::from(offset), value);
+                self.cycles
+            }
             // Opcode::AddSpDisp(_) => todo!(),
-            // Opcode::LdAOffsetImm(_) => todo!(),
+            Opcode::LdAOffsetImm(offset) => {
+                let value = cpu.read(0xFF00 + u16::from(offset));
+                cpu.set_reg(Register::A, value);
+                self.cycles
+            }
             // Opcode::LdHLSPDisp(_) => todo!(),
-            // Opcode::PopWideReg(_) => todo!(),
-            // Opcode::Ret => todo!(),
+            Opcode::PopWideReg(reg) => {
+                cpu.pop_wide_reg(reg);
+                self.cycles
+            }
+            Opcode::Ret => {
+                cpu.ret();
+                self.cycles
+            }
             // Opcode::Reti => todo!(),
-            // Opcode::JpHL => todo!(),
-            // Opcode::LdSPHL => todo!(),
-            // Opcode::JPCondImm(_, _) => todo!(),
-            // Opcode::LdOffsetCA => todo!(),
-            // Opcode::LdDerefImmA(_) => todo!(),
-            // Opcode::LdAOffsetC => todo!(),
-            // Opcode::LdADerefImm(_) => todo!(),
-            // Opcode::JP(_) => todo!(),
+            Opcode::JpHL => {
+                let addr = cpu.wide_reg(WideRegister::HL);
+                cpu.pc = addr;
+                self.cycles
+            }
+            Opcode::LdSPHL => {
+                let addr = cpu.wide_reg(WideRegister::HL);
+                cpu.sp = addr;
+                self.cycles
+            }
+            Opcode::JPCondImm(cond, addr) => {
+                if cpu.condition(cond) {
+                    cpu.pc = addr;
+                    self.branch_cycles
+                } else {
+                    self.cycles
+                }
+            }
+            Opcode::LdOffsetCA => {
+                let a = cpu.reg(Register::A);
+                let c = cpu.reg(Register::C);
+                let addr: u16 = 0xFF00 + u16::from(c);
+                cpu.write(addr, a);
+                self.cycles
+            }
+            Opcode::LdDerefImmA(addr) => {
+                let value = cpu.reg(Register::A);
+                cpu.write(addr, value);
+                self.cycles
+            }
+            Opcode::LdAOffsetC => {
+                let c = cpu.reg(Register::C);
+                let addr = 0xFF00 + u16::from(c);
+                let value = cpu.read(addr);
+                cpu.set_reg(Register::A, value);
+                self.cycles
+            }
+            Opcode::LdADerefImm(addr) => {
+                let value = cpu.read(addr);
+                cpu.set_reg(Register::A, value);
+                self.cycles
+            }
+            Opcode::JP(addr) => {
+                cpu.pc = addr;
+                self.cycles
+            }
             // Opcode::DI => todo!(),
             // Opcode::EI => todo!(),
-            // Opcode::CallCondImm(_, _) => todo!(),
-            // Opcode::PushWideReg(_) => todo!(),
-            // Opcode::CallImm(_) => todo!(),
-            // Opcode::AddImm(_) => todo!(),
-            // Opcode::AdcImm(_) => todo!(),
-            // Opcode::SubImm(_) => todo!(),
-            // Opcode::SbcImm(_) => todo!(),
-            // Opcode::AndImm(_) => todo!(),
-            // Opcode::XorImm(_) => todo!(),
-            // Opcode::OrImm(_) => todo!(),
-            // Opcode::CpImm(_) => todo!(),
-            // Opcode::Rst(_) => todo!(),
-            // Opcode::Rlc(_) => todo!(),
-            // Opcode::Rrc(_) => todo!(),
-            // Opcode::Rl(_) => todo!(),
-            // Opcode::Rr(_) => todo!(),
-            // Opcode::Sla(_) => todo!(),
-            // Opcode::Sra(_) => todo!(),
-            // Opcode::Swap(_) => todo!(),
-            // Opcode::Srl(_) => todo!(),
-            // Opcode::Bit(_, _) => todo!(),
-            // Opcode::Res(_, _) => todo!(),
-            // Opcode::Set(_, _) => todo!(),
+            Opcode::CallCondImm(cond, addr) => {
+                if cpu.condition(cond) {
+                    cpu.call(addr);
+                    self.branch_cycles
+                } else {
+                    self.cycles
+                }
+            }
+            Opcode::PushWideReg(reg) => {
+                cpu.push_wide_reg(reg);
+                self.cycles
+            }
+            Opcode::CallImm(addr) => {
+                cpu.call(addr);
+                self.cycles
+            }
+            Opcode::AddImm(n) => {
+                cpu.add(n);
+                self.cycles
+            }
+            Opcode::AdcImm(n) => {
+                cpu.adc(n);
+                self.cycles
+            }
+            Opcode::SubImm(n) => {
+                cpu.sub(n);
+                self.cycles
+            }
+            Opcode::SbcImm(n) => {
+                cpu.sbc(n);
+                self.cycles
+            }
+            Opcode::AndImm(n) => {
+                cpu.and(n);
+                self.cycles
+            }
+            Opcode::XorImm(n) => {
+                cpu.xor(n);
+                self.cycles
+            }
+            Opcode::OrImm(n) => {
+                cpu.or(n);
+                self.cycles
+            }
+            Opcode::CpImm(n) => {
+                cpu.cp(n);
+                self.cycles
+            }
+            Opcode::Rst(addr) => {
+                cpu.call(addr.into());
+                self.cycles
+            }
+            Opcode::Rlc(reg) => {
+                cpu.rlc(reg, true);
+                self.cycles
+            }
+            Opcode::Rrc(reg) => {
+                cpu.rrc(reg, true);
+                self.cycles
+            }
+            Opcode::Rl(reg) => {
+                cpu.rl(reg, true);
+                self.cycles
+            }
+            Opcode::Rr(reg) => {
+                cpu.rr(reg, true);
+                self.cycles
+            }
+            Opcode::Sla(reg) => {
+                cpu.sla(reg);
+                self.cycles
+            }
+            Opcode::Sra(reg) => {
+                cpu.sra(reg);
+                self.cycles
+            }
+            Opcode::Swap(reg) => {
+                cpu.swap(reg);
+                self.cycles
+            }
+            Opcode::Srl(reg) => {
+                cpu.srl(reg);
+                self.cycles
+            }
+            Opcode::Bit(bit, reg) => {
+                let value = cpu.reg(reg);
+                cpu.f.set(FlagsRegister::Z, value.bit(bit.into()));
+                self.cycles
+            }
+            Opcode::Res(bit, reg) => {
+                let mut value = cpu.reg(reg);
+                value.reset_bit(bit.into());
+                cpu.set_reg(reg, value);
+                self.cycles
+            }
+            Opcode::Set(bit, reg) => {
+                let mut value = cpu.reg(reg);
+                value.set_bit(bit.into());
+                cpu.set_reg(reg, value);
+                self.cycles
+            }
             _ => self.cycles,
         }
     }

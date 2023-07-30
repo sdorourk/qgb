@@ -270,4 +270,45 @@ where
             FlagCondition::C => self.f.contains(FlagsRegister::C),
         }
     }
+
+    /// Pop a 16-bit value off the stack, set the program counter to this value, and
+    /// update the stack pointer.
+    pub(super) fn ret(&mut self) {
+        self.pc = self.pop();
+    }
+
+    /// Push the program counter to the stack and set it to the given address.
+    pub(super) fn call(&mut self, addr: u16) {
+        self.push(self.pc);
+        self.pc = addr;
+    }
+
+    /// Pop a 16-bit value off of the stack and update the stack pointer.
+    ///
+    /// Returns the 16-bit value from the stack.
+    pub(super) fn pop(&mut self) -> u16 {
+        let value = self.read_u16(self.sp);
+        self.sp = self.sp.wrapping_add(2);
+        value
+    }
+
+    /// Pop a 16-bit value off the stack, store the value in the given register, and
+    /// update the stack pointer.
+    pub(super) fn pop_wide_reg(&mut self, reg: WideRegister) {
+        let value = self.pop();
+        self.set_wide_reg(reg, value);
+    }
+
+    /// Push a 16-bit value onto the stack and update the stack pointer.
+    pub(super) fn push(&mut self, value: u16) {
+        self.sp = self.sp.wrapping_sub(2);
+        self.write_u16(self.sp, value);
+    }
+
+    /// Push a 16-bit value from the given register onto the stack and update the stack
+    /// pointer.
+    pub(super) fn push_wide_reg(&mut self, reg: WideRegister) {
+        let value = self.wide_reg(reg);
+        self.push(value);
+    }
 }

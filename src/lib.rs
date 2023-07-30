@@ -12,8 +12,7 @@ use components::mmu;
 pub type TCycles = i64;
 
 pub struct GameBoy {
-    //pub(crate) cpu: cpu::Cpu<mmu::Mmu>,
-    pub(crate) cpu: cpu::Cpu<mmu::dummy_mmu::DummyMmu>,
+    pub(crate) cpu: cpu::Cpu<mmu::Mmu>,
 }
 
 #[derive(Debug, Error)]
@@ -55,18 +54,14 @@ pub enum BootRomError {
 
 impl GameBoy {
     pub fn new(rom: &[u8], boot_rom: &[u8]) -> Result<Self, BootError> {
-        //let mmu = mmu::Mmu::new(rom, boot_rom)?;
-        let mmu = mmu::dummy_mmu::DummyMmu::new(rom);
+        let mmu = mmu::Mmu::new(rom, boot_rom)?;
 
         Ok(Self {
             cpu: cpu::Cpu::new(mmu),
         })
     }
 
-    /*pub fn cpu(&self) -> &cpu::Cpu<mmu::Mmu> {
-        &self.cpu
-    }*/
-    pub fn cpu(&self) -> &cpu::Cpu<mmu::dummy_mmu::DummyMmu> {
+    pub fn cpu(&self) -> &cpu::Cpu<mmu::Mmu> {
         &self.cpu
     }
 
