@@ -29,17 +29,17 @@ where
 
     /// Add an 8-bit value to the accumulator register plus the carry flag, (re)setting
     /// the carry,  half-carry, and zero flags as required.
-    pub(super) fn adc(&mut self, mut n: u8) {
+    pub(super) fn adc(&mut self, n: u8) {
         let value = self.reg(Register::A);
-        if self.f.intersects(FlagsRegister::C) {
-            n = n.wrapping_add(1);
-        }
-        let hc = half_carry_add(value, n);
-        let (value, carry) = value.overflowing_add(n);
+        let old_carry = self.f.intersects(FlagsRegister::C);
+
+        let hc = half_carry_adc(value, n, old_carry);
+        let (value, carry1) = value.overflowing_add(n);
+        let (value, carry2) = value.overflowing_add(if old_carry { 1 } else { 0 });
 
         self.set_reg(Register::A, value);
         self.f.set(FlagsRegister::H, hc);
-        self.f.set(FlagsRegister::C, carry);
+        self.f.set(FlagsRegister::C, carry1 || carry2);
         self.f.set(FlagsRegister::Z, value == 0);
     }
 
@@ -58,17 +58,17 @@ where
 
     /// Subtract an 8-bit value and the carry flag from the accumulator register,
     /// (re)setting the carry, half-carry, and zero flags as required.
-    pub(super) fn sbc(&mut self, mut n: u8) {
+    pub(super) fn sbc(&mut self, n: u8) {
         let value = self.reg(Register::A);
-        if self.f.intersects(FlagsRegister::C) {
-            n = n.wrapping_add(1);
-        }
-        let hc = half_carry_sub(value, n);
-        let (value, carry) = value.overflowing_sub(n);
+        let old_carry = self.f.intersects(FlagsRegister::C);
+
+        let hc = half_carry_sbc(value, n, old_carry);
+        let (value, carry1) = value.overflowing_sub(n);
+        let (value, carry2) = value.overflowing_sub(if old_carry { 1 } else { 0 });
 
         self.set_reg(Register::A, value);
         self.f.set(FlagsRegister::H, hc);
-        self.f.set(FlagsRegister::C, carry);
+        self.f.set(FlagsRegister::C, carry1 || carry2);
         self.f.set(FlagsRegister::Z, value == 0);
     }
 
@@ -294,9 +294,23 @@ fn half_carry_add(x: u8, y: u8) -> bool {
     (((x & 0x0F) + (y & 0x0F)) & 0x10) == 0x10
 }
 
+/// Check if a half carry will occur when adding `x` to `y` and the carry flag;
+/// here, `c` is the value of the carry flag.
+fn half_carry_adc(x: u8, y: u8, c: bool) -> bool {
+    let c = if c { 1 } else { 0 };
+    (((x & 0x0F) + (y & 0x0F) + c) & 0x10) == 0x10
+}
+
 /// Check if a half carry will occur when subtracting `y` from `x`.
 fn half_carry_sub(x: u8, y: u8) -> bool {
     ((x & 0x0F).wrapping_sub(y & 0x0F)) & 0x10 == 0x10
+}
+
+/// Check if a half carry will occur when subtracting `y` and the carry flag
+/// from `x`; here, `c` is the value of the carry flag.
+fn half_carry_sbc(x: u8, y: u8, c: bool) -> bool {
+    let c = if c { 1 } else { 0 };
+    (x & 0x0F) < (y & 0x0F) + c
 }
 
 /// Check if a half carry will occur when adding `x` and `y`.
