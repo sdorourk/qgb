@@ -277,7 +277,7 @@ where
         self.f.set(FlagsRegister::Z, value == 0);
     }
 
-    /// Shift an 8-bit register right logically, re(setting) the zero and carry flags
+    /// Shift an 8-bit register right logically, (re)setting the zero and carry flags
     /// as required.
     pub(super) fn srl(&mut self, reg: Register) {
         let mut value = self.reg(reg);
@@ -286,6 +286,22 @@ where
         self.set_reg(reg, value);
         self.f.set(FlagsRegister::Z, value == 0);
         self.f.set(FlagsRegister::C, carry);
+    }
+
+    /// Add a signed 8-bit value to the stack pointer, (re)setting the carry and
+    /// half carry flags as required.
+    pub(super) fn add_sp_offset(&mut self, offset: i8) -> u16 {
+        let value = self.sp;
+        let bytes = value.to_le_bytes();
+        let unsigned_offset = 0u8.wrapping_add_signed(offset);
+
+        let hc = half_carry_add(bytes[0], unsigned_offset);
+        let (_, carry) = bytes[0].overflowing_add(unsigned_offset);
+
+        self.f.set(FlagsRegister::H, hc);
+        self.f.set(FlagsRegister::C, carry);
+
+        value.wrapping_add_signed(offset.into())
     }
 }
 

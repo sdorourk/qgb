@@ -212,13 +212,20 @@ impl Instruction {
                 cpu.write(0xFF00 + u16::from(offset), value);
                 self.cycles
             }
-            // Opcode::AddSpDisp(_) => todo!(),
+            Opcode::AddSpDisp(offset) => {
+                cpu.sp = cpu.add_sp_offset(offset);
+                self.cycles
+            }
             Opcode::LdAOffsetImm(offset) => {
                 let value = cpu.read(0xFF00 + u16::from(offset));
                 cpu.set_reg(Register::A, value);
                 self.cycles
             }
-            // Opcode::LdHLSPDisp(_) => todo!(),
+            Opcode::LdHLSPDisp(offset) => {
+                let value = cpu.add_sp_offset(offset);
+                cpu.set_wide_reg(WideRegister::HL, value);
+                self.cycles
+            }
             Opcode::PopWideReg(reg) => {
                 cpu.pop_wide_reg(reg);
                 self.cycles
