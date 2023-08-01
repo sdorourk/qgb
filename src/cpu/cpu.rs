@@ -312,3 +312,80 @@ where
         self.push(value);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::components::mmu::dummy_mmu::DummyMmu;
+
+    use super::*;
+
+    type TestCpu = Cpu<DummyMmu>;
+
+    fn new_cpu(rom: &[u8]) -> TestCpu {
+        let mmu = DummyMmu::new(rom);
+        Cpu::new(mmu)
+    }
+
+    fn execute(cpu: &mut TestCpu) -> TCycles {
+        let instr = cpu
+            .fetch()
+            .unwrap_or_else(|byte| panic!("Unknown instruction (${byte:02X})"));
+        cpu.execute(instr)
+    }
+
+    #[test]
+    fn ld_immediate() {
+        let mut rom = Vec::new();
+        for i in 0..=0xFFu8 {
+            rom.push(0x06); // LD B, i
+            rom.push(i);
+            rom.push(0x0E); // LD C, i
+            rom.push(i);
+            rom.push(0x16); // LD D, i
+            rom.push(i);
+            rom.push(0x1E); // LD E, i
+            rom.push(i);
+            rom.push(0x26); // LD H, i
+            rom.push(i);
+            rom.push(0x2E); // LD L, i
+            rom.push(i);
+            rom.push(0x3E); // LD A, i
+            rom.push(i);
+        }
+
+        let mut cpu = new_cpu(&rom);
+        for i in 0..=0xFFu8 {
+            execute(&mut cpu);
+            assert_eq!(cpu.b, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.c, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.d, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.e, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.h, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.l, i);
+            execute(&mut cpu);
+            assert_eq!(cpu.a, i);
+        }
+
+        const WRITE_ADDR: u16 = 0x0F00;
+        let mut rom = Vec::new();
+        rom.push(0x26); // LD H, $0F
+        rom.push(WRITE_ADDR.to_le_bytes()[1]);
+        for i in 0..=0xFFu8 {
+            rom.push(0x36); // LD (HL), i
+            rom.push(i);
+        }
+
+        let mut cpu = new_cpu(&rom);
+        execute(&mut cpu);
+        for i in 0..=0xFFu8 {
+            execute(&mut cpu);
+            let value = cpu.read(WRITE_ADDR);
+            assert_eq!(value, i);
+        }
+    }
+}
