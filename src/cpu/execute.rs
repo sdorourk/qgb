@@ -34,7 +34,6 @@ impl Instruction {
             }
             Opcode::JrCond(cond, offset) => {
                 if cpu.condition(cond) {
-                    cpu.pc = cpu.pc.wrapping_sub(self.length);
                     cpu.pc = cpu.pc.wrapping_add_signed(i16::from(offset));
                     self.branch_cycles
                 } else {
@@ -369,7 +368,7 @@ impl Instruction {
             }
             Opcode::Bit(bit, reg) => {
                 let value = cpu.reg(reg);
-                cpu.f.set(FlagsRegister::Z, value.bit(bit.into()));
+                cpu.f.set(FlagsRegister::Z, !value.bit(bit.into()));
                 self.cycles
             }
             Opcode::Res(bit, reg) => {
