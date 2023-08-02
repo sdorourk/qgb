@@ -1,5 +1,6 @@
 mod cartridge_base;
 mod header;
+mod mbc1;
 mod rom_only;
 
 use std::fmt::Debug;
@@ -37,6 +38,10 @@ pub fn new_cartridge(rom: &[u8]) -> Result<Cartridge, RomError> {
 
     match header.cartridge_type {
         CartridgeType::RomOnly => Ok(Box::new(rom_only::RomOnly::new(rom, header)?)),
+        CartridgeType::Mbc1 | CartridgeType::Mbc1Ram | CartridgeType::Mbc1RamBattery => {
+            // TODO: detect MBC1M multi-cart
+            Ok(Box::new(mbc1::Mbc1::new(rom, header)?))
+        }
         _ => Err(RomError::UnsupportedCartridgeType(header.cartridge_type)),
     }
 }

@@ -189,18 +189,19 @@ impl Mmu {
                     self.cartridge.read_rom(addr)
                 }
             }
-            MappedAddress::VRam(_) => todo!(),
+            // MappedAddress::VRam(_) => todo!(),
             MappedAddress::ExternalRam(addr) => self.cartridge.read_ram(addr),
             MappedAddress::WRam(addr) => self.wram[usize::from(addr)],
-            MappedAddress::MirrorRam(_) => todo!(),
-            MappedAddress::Oam(_) => todo!(),
-            MappedAddress::IoReg => todo!(),
-            MappedAddress::TimerReg => todo!(),
-            MappedAddress::ApuReg => todo!(),
-            MappedAddress::PpuReg => todo!(),
+            // MappedAddress::MirrorRam(_) => todo!(),
+            // MappedAddress::Oam(_) => todo!(),
+            // MappedAddress::IoReg => todo!(),
+            // MappedAddress::TimerReg => todo!(),
+            // MappedAddress::ApuReg => todo!(),
+            // MappedAddress::PpuReg => todo!(),
             MappedAddress::BankReg => unreachable!(),
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)],
-            MappedAddress::Interrupt => todo!(),
+            // MappedAddress::Interrupt => todo!(),
+            _ => return None,
         };
 
         Some(ReadInfo {
@@ -226,15 +227,15 @@ impl Mmu {
 
         match mapped_addr {
             MappedAddress::CartridgeRom => self.cartridge.write_rom(addr, value),
-            MappedAddress::VRam(_) => todo!(),
+            // MappedAddress::VRam(_) => todo!(),
             MappedAddress::ExternalRam(addr) => self.cartridge.write_ram(addr, value),
-            MappedAddress::WRam(addr) => self.hram[usize::from(addr)] = value,
-            MappedAddress::MirrorRam(_) => todo!(),
-            MappedAddress::Oam(_) => todo!(),
-            MappedAddress::IoReg => todo!(),
-            MappedAddress::TimerReg => todo!(),
-            MappedAddress::ApuReg => todo!(),
-            MappedAddress::PpuReg => todo!(),
+            MappedAddress::WRam(addr) => self.wram[usize::from(addr)] = value,
+            // MappedAddress::MirrorRam(_) => todo!(),
+            // MappedAddress::Oam(_) => todo!(),
+            // MappedAddress::IoReg => todo!(),
+            // MappedAddress::TimerReg => todo!(),
+            // MappedAddress::ApuReg => todo!(),
+            // MappedAddress::PpuReg => todo!(),
             MappedAddress::BankReg => {
                 if value != 0 {
                     self.boot_mode = false;
@@ -242,7 +243,8 @@ impl Mmu {
                 }
             }
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)] = value,
-            MappedAddress::Interrupt => todo!(),
+            // MappedAddress::Interrupt => todo!(),
+            _ => return Err(()),
         };
         Ok(WriteInfo {
             mapped_addr,

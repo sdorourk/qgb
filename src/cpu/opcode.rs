@@ -162,7 +162,7 @@ impl Display for Opcode {
             Opcode::XorImm(n) => write!(f, "XOR A, ${:02X}", n),
             Opcode::OrImm(n) => write!(f, "OR A, ${:02X}", n),
             Opcode::CpImm(n) => write!(f, "CP A, ${:02X}", n),
-            Opcode::Rst(y) => write!(f, "RST ${:02X}", y * 8),
+            Opcode::Rst(y) => write!(f, "RST ${:02X}", y),
             Opcode::Rlc(reg) => write!(f, "RLC {}", reg),
             Opcode::Rrc(reg) => write!(f, "RRC {}", reg),
             Opcode::Rl(reg) => write!(f, "RL {}", reg),
