@@ -388,4 +388,148 @@ mod test {
             assert_eq!(value, i);
         }
     }
+
+    #[test]
+    fn ld() {
+        let mut rom = Vec::new();
+        rom.push(0x06); // LD B, $AB
+        rom.push(0xAB);
+        rom.push(0x26); // LD H, $FF
+        rom.push(0xFF);
+        rom.push(0x48); // LD C, B
+        rom.push(0x50); // LD D, B
+        rom.push(0x58); // LD E, B
+        rom.push(0x68); // LD L, B
+        rom.push(0x70); // LD (HL), B
+        rom.push(0x78); // LD A, B
+
+        let mut cpu = new_cpu(&rom);
+        execute(&mut cpu);
+        assert_eq!(cpu.b, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.h, 0xFF);
+        execute(&mut cpu);
+        assert_eq!(cpu.c, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.d, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.e, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.l, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.mmu.read(0xFFAB), 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0xAB);
+    }
+
+    #[test]
+    fn wide_reg() {
+        let mut rom = Vec::new();
+        rom.push(0x01); // LD BC, $FF01
+        rom.push(0x01);
+        rom.push(0xFF);
+        rom.push(0x23); // INC HL
+        rom.push(0x09); // ADD HL, BC
+        rom.push(0x33); // INC SP
+
+        let mut cpu = new_cpu(&rom);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::BC), 0xFF01);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::HL), 0x0001);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::HL), 0xFF02);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::SP), 0x0001);
+    }
+
+    #[test]
+    fn ld_offset() {
+        let mut rom = Vec::new();
+        rom.push(0x3E); // LD A, $01
+        rom.push(0x01);
+        rom.push(0xE0); // LD ($FF12), A
+        rom.push(0x12);
+        rom.push(0x3E); // LD A, $00
+        rom.push(0x00);
+        rom.push(0xF0); // LD A, ($FF12)
+        rom.push(0x12);
+        rom.push(0x0E); // LD C, 0x12
+        rom.push(0x12);
+        rom.push(0x3E); // LD A, $AB
+        rom.push(0xAB);
+        rom.push(0xE2); // LD ($FF00+C), A
+        rom.push(0x3E); // LD A, $00
+        rom.push(0x00);
+        rom.push(0xF2); // LD A, ($FF00+C)
+        rom.push(0xEA); // LD ($0123), A
+        rom.push(0x23);
+        rom.push(0x01);
+        rom.push(0xFA); // LD A, ($FF00)
+        rom.push(0x00);
+        rom.push(0xFF);
+
+        let mut cpu = new_cpu(&rom);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0x01);
+        execute(&mut cpu);
+        assert_eq!(cpu.mmu.read(0xFF12), 0x01);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0x00);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0x01);
+        execute(&mut cpu);
+        assert_eq!(cpu.c, 0x12);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.mmu.read(0xFF12), 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0x00);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.mmu.read(0x0123), 0xAB);
+        execute(&mut cpu);
+        assert_eq!(cpu.a, 0x00);
+    }
+
+    #[test]
+    fn stack() {
+        let mut rom = Vec::new();
+        rom.push(0x03B); // DEC SP
+        rom.push(0x21); // LD HL, $FF0B
+        rom.push(0x0B);
+        rom.push(0xFF);
+        rom.push(0x11); // LD DE, $0123
+        rom.push(0x23);
+        rom.push(0x01);
+        rom.push(0xE5); // PUSH HL
+        rom.push(0xD5); // PUSH DE
+        rom.push(0xC1); // POP BC
+        rom.push(0xD1); // POP DE
+        rom.push(0xCD); // CALL #000F
+        rom.push(0x0F);
+        rom.push(0x00);
+        rom.push(0x00); // NOP
+        rom.push(0xC9); // RET
+
+        let mut cpu = new_cpu(&rom);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::SP), 0xFFFF);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::HL), 0xFF0B);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::DE), 0x0123);
+        execute(&mut cpu);
+        execute(&mut cpu);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::BC), 0x0123);
+        execute(&mut cpu);
+        assert_eq!(cpu.wide_reg(WideRegister::DE), 0xFF0B);
+        execute(&mut cpu);
+        assert_eq!(cpu.pc, 0x000F);
+        execute(&mut cpu);
+        assert_eq!(cpu.pc, 0x000E);
+    }
 }
