@@ -293,5 +293,7 @@ impl ReadWriteMemory for Mmu {
 }
 
 impl Tick for Mmu {
-    fn tick(&mut self, _cycles: TCycles) {}
+    fn tick(&mut self, cycles: TCycles) {
+        self.io.tick(cycles);
+    }
 }
