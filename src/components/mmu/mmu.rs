@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use super::*;
 
-use crate::{cartridge, TCycles};
+use crate::{cartridge, components::io::IoHandler, TCycles};
 
 const BOOT_ROM_SIZE: usize = 0x0100;
 
@@ -56,6 +56,8 @@ pub struct Mmu {
     hram: [u8; HRAM_SIZE],
     /// Work RAM
     wram: [u8; WRAM_SIZE],
+    /// Joypad and serial transfer input/output
+    io: IoHandler,
 }
 
 impl Mmu {
@@ -73,6 +75,7 @@ impl Mmu {
             cartridge: cartridge::new_cartridge(rom)?,
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
+            io: IoHandler::new(),
         })
     }
 }
@@ -194,7 +197,7 @@ impl Mmu {
             MappedAddress::WRam(addr) => self.wram[usize::from(addr)],
             // MappedAddress::MirrorRam(_) => todo!(),
             // MappedAddress::Oam(_) => todo!(),
-            // MappedAddress::IoReg => todo!(),
+            MappedAddress::IoReg => self.io.read(addr),
             // MappedAddress::TimerReg => todo!(),
             // MappedAddress::ApuReg => todo!(),
             // MappedAddress::PpuReg => todo!(),
@@ -232,7 +235,7 @@ impl Mmu {
             MappedAddress::WRam(addr) => self.wram[usize::from(addr)] = value,
             // MappedAddress::MirrorRam(_) => todo!(),
             // MappedAddress::Oam(_) => todo!(),
-            // MappedAddress::IoReg => todo!(),
+            MappedAddress::IoReg => self.io.write(addr, value),
             // MappedAddress::TimerReg => todo!(),
             // MappedAddress::ApuReg => todo!(),
             // MappedAddress::PpuReg => todo!(),
