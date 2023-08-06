@@ -159,10 +159,6 @@ impl Debugger {
     }
 
     fn prologue(&self) {
-        println!(
-            "{:04X}: {}",
-            self.gb.cpu().pc,
-            self.gb.fetch().unwrap().opcode
-        );
+        
     }
 }

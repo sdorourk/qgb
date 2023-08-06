@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use bitflags::bitflags;
 
 use crate::{
-    mmu::{ReadWriteMemory, Tick},
+    components::mmu::{ReadWriteMemory, Tick},
     TCycles,
 };
 

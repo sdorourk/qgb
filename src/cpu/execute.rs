@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     bits::Bits,
-    mmu::{ReadWriteMemory, Tick},
+    components::mmu::{ReadWriteMemory, Tick},
     TCycles,
 };
 
