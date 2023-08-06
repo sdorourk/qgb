@@ -2,12 +2,12 @@
 //!
 //! This implementation stores a large memory buffer that it reads and writes to.  It does
 //! not implement any components or memory mapped registers.
-
+#![cfg(test)]
 use std::fmt::Debug;
 
 use super::*;
 
-const MEMORY_SIZE: usize = u16::MAX as usize;
+const MEMORY_SIZE: usize = 64 * 1024;
 
 pub struct DummyMmu {
     memory: Box<[u8]>,
