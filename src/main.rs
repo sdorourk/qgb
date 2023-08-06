@@ -138,7 +138,7 @@ impl Debugger {
             };
 
             match cmd {
-                Command::Dump => println!("{:#X?}", self.gb.cpu()),
+                Command::Dump => println!("{:#X?}", self.gb.state()),
                 Command::Step => {
                     self.gb.step();
                 }

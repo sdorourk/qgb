@@ -2,9 +2,11 @@ mod bits;
 pub mod cartridge;
 mod components;
 pub mod cpu;
+pub mod state;
 
 use std::fmt::Debug;
 
+pub use state::State;
 use thiserror::Error;
 
 use components::mmu;
@@ -13,6 +15,7 @@ pub type TCycles = i64;
 
 pub struct GameBoy {
     pub(crate) cpu: cpu::Cpu<mmu::Mmu>,
+    pub state: State,
 }
 
 #[derive(Debug, Error)]
@@ -58,7 +61,16 @@ impl GameBoy {
 
         Ok(Self {
             cpu: cpu::Cpu::new(mmu),
+            state: Default::default(),
         })
+    }
+
+    pub fn state(&mut self) -> &State {
+        &self.state
+    }
+
+    pub fn set_instruction_buffer_size(&mut self, buffer_size: usize) {
+        self.state.instruction_buffer_size = buffer_size;
     }
 
     pub fn cpu(&self) -> &cpu::Cpu<mmu::Mmu> {
