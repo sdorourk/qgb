@@ -4,6 +4,7 @@ use bitflags::bitflags;
 
 use crate::{
     components::mmu::{ReadWriteMemory, Tick},
+    state::{InstructionInfo, PollState},
     TCycles,
 };
 
@@ -310,6 +311,100 @@ where
     pub(super) fn push_wide_reg(&mut self, reg: WideRegister) {
         let value = self.wide_reg(reg);
         self.push(value);
+    }
+}
+
+impl<T> PollState for Cpu<T>
+where
+    T: Debug + ReadWriteMemory + Tick + PollState,
+{
+    fn poll_state(&self, state: &mut crate::State) {
+        if state.cpu.is_none() {
+            state.cpu = Some(Default::default());
+        }
+        if let Some(cpu_state) = &mut state.cpu {
+            cpu_state.a = self.a;
+            cpu_state.b = self.b;
+            cpu_state.c = self.c;
+            cpu_state.d = self.d;
+            cpu_state.e = self.e;
+            cpu_state.f = self.f.bits();
+            cpu_state.h = self.h;
+            cpu_state.l = self.l;
+
+            cpu_state.z_flag = self.f.contains(FlagsRegister::Z);
+            cpu_state.n_flag = self.f.contains(FlagsRegister::N);
+            cpu_state.h_flag = self.f.contains(FlagsRegister::H);
+            cpu_state.c_flag = self.f.contains(FlagsRegister::C);
+
+            cpu_state.af = self.wide_reg(WideRegister::AF);
+            cpu_state.bc = self.wide_reg(WideRegister::BC);
+            cpu_state.de = self.wide_reg(WideRegister::DE);
+            cpu_state.hl = self.wide_reg(WideRegister::HL);
+            cpu_state.pc = self.pc;
+            cpu_state.sp = self.sp;
+
+            let mut stream = DebugByteStream {
+                pc: self.pc,
+                mmu: &self.mmu,
+                bytes: Vec::new(),
+            };
+
+            cpu_state.instructions.clear();
+            for _ in 0..state.instruction_buffer_size {
+                cpu_state.instructions.push(stream.fetch());
+            }
+        }
+        self.mmu.poll_state(state);
+    }
+}
+
+/// `ByteStream` implementation for polling the state of the emulator (for debugging)
+struct DebugByteStream<'a, T>
+where
+    T: ReadWriteMemory,
+{
+    /// Program counter
+    pc: u16,
+    /// Memory management unit to read bytes from
+    mmu: &'a T,
+    /// List of bytes read
+    bytes: Vec<u8>,
+}
+
+impl<'a, T> instruction::ByteStream for DebugByteStream<'a, T>
+where
+    T: ReadWriteMemory,
+{
+    fn fetch(&mut self) -> u8 {
+        let old_pc = self.pc;
+        self.pc = self.pc.wrapping_add(1);
+        let byte = self.mmu.read(old_pc);
+        self.bytes.push(byte);
+        byte
+    }
+}
+
+impl<'a, T> DebugByteStream<'a, T>
+where
+    T: ReadWriteMemory,
+{
+    fn fetch(&mut self) -> InstructionInfo {
+        let instr = instruction::Instruction::try_from(self);
+        let info = match instr {
+            Ok(instr) => InstructionInfo {
+                display: instr.opcode.to_string(),
+                address: self.pc.wrapping_sub(instr.length),
+                bytes: self.bytes.clone(),
+            },
+            Err(byte) => InstructionInfo {
+                display: format!("DATA {:02X}", byte),
+                address: self.pc.wrapping_sub(1),
+                bytes: self.bytes.clone(),
+            },
+        };
+        self.bytes.clear();
+        info
     }
 }
 

@@ -158,7 +158,9 @@ impl Debugger {
         }
     }
 
-    fn prologue(&self) {
-        
+    fn prologue(&mut self) {
+        if let Some(cpu_state) = &self.gb.state().cpu {
+            println!("{:X?}", cpu_state.instructions[0]);
+        }
     }
 }

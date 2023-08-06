@@ -7,13 +7,16 @@ use std::fmt::Debug;
 
 pub use header::*;
 
-use crate::RomError;
+use crate::{state::PollState, RomError};
 
 const ROM_BANK_SIZE: usize = 16 * 1024;
 const RAM_BANK_SIZE: usize = 8 * 1024;
 
+pub trait CartridgeTraits: CartridgeInterface + PollState {}
+impl<T> CartridgeTraits for T where T: CartridgeInterface + PollState {}
+
 /// Game cartridge
-pub type Cartridge = Box<dyn CartridgeInterface + Send + Sync>;
+pub type Cartridge = Box<dyn CartridgeTraits + Send + Sync>;
 
 /// The `CartridgeInterface` trait needs to be implemented for each supported
 /// cartridge type.

@@ -1,4 +1,7 @@
-use crate::components::mmu::{ROM_BANK0_END, ROM_BANK0_START, ROM_BANK1_END, ROM_BANK1_START};
+use crate::{
+    components::mmu::{ROM_BANK0_END, ROM_BANK0_START, ROM_BANK1_END, ROM_BANK1_START},
+    state::{CartridgeState, PollState},
+};
 
 use super::{RAM_BANK_SIZE, ROM_BANK_SIZE};
 
@@ -106,5 +109,31 @@ impl super::CartridgeInterface for CartridgeBase {
 
     fn header(&self) -> &super::Header {
         &self.header
+    }
+}
+
+impl PollState for CartridgeBase {
+    fn poll_state(&self, state: &mut crate::State) {
+        if state.cartridge.is_none() {
+            state.cartridge = Some(CartridgeState {
+                header: self.header.clone(),
+                rom: self.rom.clone(),
+                ram: self.ram.clone(),
+                ..Default::default()
+            });
+        }
+        if let Some(cart_state) = &mut state.cartridge {
+            cart_state.rom_bank0 = self.rom_bank0;
+            cart_state.rom_bank0_range =
+                (self.rom_bank0 * ROM_BANK_SIZE)..((self.rom_bank0 + 1) * ROM_BANK_SIZE);
+            cart_state.rom_bank1 = self.rom_bank1;
+            cart_state.rom_bank1_range =
+                (self.rom_bank1 * ROM_BANK_SIZE)..((self.rom_bank1 + 1) * ROM_BANK_SIZE);
+            cart_state.ram_enabled = self.ram_enabled;
+            if self.ram.is_some() {
+                cart_state.ram_bank_range =
+                    Some((self.ram_bank * RAM_BANK_SIZE)..((self.ram_bank + 1) * RAM_BANK_SIZE));
+            }
+        }
     }
 }

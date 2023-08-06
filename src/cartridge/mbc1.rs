@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::cartridge::ROM_BANK_SIZE;
+use crate::{cartridge::ROM_BANK_SIZE, state::PollState};
 
 use super::{cartridge_base::CartridgeBase, CartridgeInterface, Header};
 
@@ -204,5 +204,31 @@ impl Debug for Mbc1 {
             .field("large_rom", &self.large_rom)
             .field("large_ram", &self.large_ram)
             .finish()
+    }
+}
+
+impl PollState for Mbc1 {
+    fn poll_state(&self, state: &mut crate::State) {
+        self.cartridge_base.poll_state(state);
+        if let Some(cart_state) = &mut state.cartridge {
+            cart_state
+                .mbc_state
+                .insert("rom_bank_reg".into(), self.rom_bank_reg.to_string());
+            cart_state
+                .mbc_state
+                .insert("rom_bank_mask".into(), self.rom_bank_mask.to_string());
+            cart_state
+                .mbc_state
+                .insert("ram_bank_reg".into(), self.ram_bank_reg.to_string());
+            cart_state
+                .mbc_state
+                .insert("bank_mode".into(), format!("{:?}", self.bank_mode));
+            cart_state
+                .mbc_state
+                .insert("large_rom".into(), self.large_rom.to_string());
+            cart_state
+                .mbc_state
+                .insert("large_ram".into(), self.large_ram.to_string());
+        }
     }
 }

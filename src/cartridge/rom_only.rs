@@ -1,3 +1,5 @@
+use crate::state::PollState;
+
 use super::{cartridge_base::CartridgeBase, Header, ROM_BANK_SIZE};
 
 /// RomOnly game cartridge (sometimes referred to as MBC0)
@@ -46,5 +48,11 @@ impl super::CartridgeInterface for RomOnly {
 
     fn header(&self) -> &Header {
         self.cartridge_base.header()
+    }
+}
+
+impl PollState for RomOnly {
+    fn poll_state(&self, state: &mut crate::State) {
+        self.cartridge_base.poll_state(state);
     }
 }

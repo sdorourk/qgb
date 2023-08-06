@@ -1,7 +1,9 @@
 pub mod error;
 pub mod state;
 
-use crate::{components::mmu, cpu::cpu, State, BootError};
+use crate::{components::mmu, cpu::cpu, BootError, State};
+
+use self::state::PollState;
 
 pub type TCycles = i64;
 
@@ -21,6 +23,7 @@ impl GameBoy {
     }
 
     pub fn state(&mut self) -> &State {
+        self.cpu.poll_state(&mut self.state);
         &self.state
     }
 

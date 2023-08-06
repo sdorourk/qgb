@@ -1,6 +1,8 @@
 //! Module for polling and recording the emulator's state
 
-use std::{collections::HashMap, fmt::Debug, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Debug, ops::Range};
+
+use crate::{cartridge::Header, components::mmu};
 
 /// Default number of instructions to fetch each time the state of the emulator is polled
 const DEFAULT_INSTRUCTION_BUFFER_SIZE: usize = 50;
@@ -28,48 +30,47 @@ pub struct State {
     pub io: Option<IoState>,
 }
 
+impl State {
+    pub const ROM_BANK0_START: u16 = mmu::ROM_BANK0_START;
+    pub const ROM_BANK1_START: u16 = mmu::ROM_BANK1_START;
+    pub const EXTERNAL_RAM_START: u16 = mmu::EXTERNAL_RAM_START;
+    pub const HRAM_START: u16 = mmu::HRAM_START;
+    pub const WRAM_START: u16 = mmu::WRAM_START;
+}
+
 /// Cartridge state
 pub struct CartridgeState {
     /// Cartridge title specified in the header
-    pub title: String,
-    /// Cartridge type
-    pub cartridge_type: String,
-    /// Number of ROM banks
-    pub rom_banks: usize,
-    /// Number of external RAM banks
-    pub ram_banks: usize,
-    /// Cartridge header checksum
-    pub checksum: u8,
-    /// Header checksum matches computed value
-    pub checksum_passed: bool,
+    pub header: Header,
     /// Cartridge ROM
     pub rom: Box<[u8]>,
     /// Index of the first ROM bank
     pub rom_bank0: usize,
     /// Range of values from `rom` stored in the first ROM bank
-    pub rom_bank0_range: RangeInclusive<usize>,
+    pub rom_bank0_range: Range<usize>,
     /// Index of the second ROM bank
     pub rom_bank1: usize,
     /// Range of values from `rom` store in the second ROM bank
-    pub rom_bank1_range: RangeInclusive<usize>,
+    pub rom_bank1_range: Range<usize>,
     /// External (cartridge) RAM (if any)
-    pub ram: Option<Box<u8>>,
+    pub ram: Option<Box<[u8]>>,
     /// Index of the RAM bank
     pub ram_bank: usize,
     /// Range of value from `ram` accessible to the CPU
-    pub ram_bank_range: Option<RangeInclusive<usize>>,
+    pub ram_bank_range: Option<Range<usize>>,
     /// External RAM enabled
     pub ram_enabled: bool,
     /// MBC-dependent state details.
-    pub mbc_state: Option<HashMap<String, String>>,
+    pub mbc_state: HashMap<String, String>,
 }
 
 /// MMU state
+#[derive(Default)]
 pub struct MmuState {
     pub boot_mode: bool,
-    pub boot_rom: Box<u8>,
-    pub wram: Box<u8>,
-    pub hram: Box<u8>,
+    pub boot_rom: Box<[u8]>,
+    pub wram: Box<[u8]>,
+    pub hram: Box<[u8]>,
 }
 
 /// CPU state
@@ -99,8 +100,6 @@ pub struct CpuState {
     pub de: u16,
     /// 16-bit register HL
     pub hl: u16,
-    /// 8-bit value accessed from the address specified in the `HL` register
-    pub deref_hl: u8,
     /// Zero flag
     pub z_flag: bool,
     /// Subtraction flag
@@ -132,7 +131,7 @@ pub struct InstructionInfo {
 #[derive(Debug, Default)]
 pub struct IoState {
     /// 8-bit registers
-    pub registers: HashMap<u16, u8>,
+    pub registers: HashMap<String, u8>,
     /// All bytes that have been transferred through the serial port
     pub transmitted_bytes: Vec<u8>,
 }
@@ -152,12 +151,7 @@ impl Default for State {
 impl Debug for CartridgeState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CartridgeState")
-            .field("title", &self.title)
-            .field("cartridge_type", &self.cartridge_type)
-            .field("rom_banks", &self.rom_banks)
-            .field("ram_banks", &self.ram_banks)
-            .field("checksum", &self.checksum)
-            .field("checksum_passed", &self.checksum_passed)
+            .field("header", &self.header)
             .field("rom_bank0", &self.rom_bank0)
             .field("rom_bank0_range", &self.rom_bank0_range)
             .field("rom_bank1", &self.rom_bank1)
@@ -173,17 +167,19 @@ impl Debug for CartridgeState {
 impl Default for CartridgeState {
     fn default() -> Self {
         Self {
-            title: Default::default(),
-            cartridge_type: Default::default(),
-            rom_banks: Default::default(),
-            ram_banks: Default::default(),
-            checksum: Default::default(),
-            checksum_passed: Default::default(),
+            header: Header {
+                title: Default::default(),
+                cartridge_type: crate::cartridge::CartridgeType::RomOnly,
+                rom_banks: Default::default(),
+                ram_banks: Default::default(),
+                checksum: Default::default(),
+                checksum_passed: Default::default(),
+            },
             rom: Default::default(),
             rom_bank0: Default::default(),
-            rom_bank0_range: 0..=0,
+            rom_bank0_range: 0..0,
             rom_bank1: Default::default(),
-            rom_bank1_range: 0..=0,
+            rom_bank1_range: 0..0,
             ram: Default::default(),
             ram_bank: Default::default(),
             ram_bank_range: Default::default(),

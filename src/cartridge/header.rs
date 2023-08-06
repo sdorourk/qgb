@@ -12,7 +12,7 @@ const RAM_SIZE: usize = 0x0149;
 const HEADER_CHECKSUM: usize = 0x014D;
 
 /// Cartridge header
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Header {
     /// Cartridge title
     pub title: String,
@@ -84,7 +84,7 @@ impl Header {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum CartridgeType {
     RomOnly,
     Mbc1,

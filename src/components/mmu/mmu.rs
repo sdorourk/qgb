@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use super::*;
 
-use crate::{cartridge, components::io::IoHandler, TCycles};
+use crate::{cartridge, components::io::IoHandler, state::PollState, TCycles};
 
 const BOOT_ROM_SIZE: usize = 0x0100;
 
@@ -14,9 +14,9 @@ pub const ROM_BANK1_START: u16 = 0x4000;
 pub const ROM_BANK1_END: u16 = 0x7FFF;
 const VRAM_START: u16 = 0x8000;
 const VRAM_END: u16 = 0x9FFF;
-const EXTERNAL_RAM_START: u16 = 0xA000;
+pub const EXTERNAL_RAM_START: u16 = 0xA000;
 const EXTERNAL_RAM_END: u16 = 0xBFFF;
-const WRAM_START: u16 = 0xC000;
+pub const WRAM_START: u16 = 0xC000;
 const WRAM_END: u16 = 0xDFFF;
 const WRAM_SIZE: usize = (WRAM_END - WRAM_START + 1) as usize;
 const MIRROR_WRAM_START: u16 = 0xE000;
@@ -39,7 +39,7 @@ pub const APU_STORAGE_END: u16 = 0xFF3F;
 pub const PPU_REG_START: u16 = 0xFF40;
 pub const PPU_REG_END: u16 = 0xFF4B;
 const BANK_REG: u16 = 0xFF50;
-const HRAM_START: u16 = 0xFF80;
+pub const HRAM_START: u16 = 0xFF80;
 const HRAM_END: u16 = 0xFFFE;
 const HRAM_SIZE: usize = (HRAM_END - HRAM_START + 1) as usize;
 pub const INTERRUPT_ENABLE_REG: u16 = 0xFFFF;
@@ -295,5 +295,21 @@ impl ReadWriteMemory for Mmu {
 impl Tick for Mmu {
     fn tick(&mut self, cycles: TCycles) {
         self.io.tick(cycles);
+    }
+}
+
+impl PollState for Mmu {
+    fn poll_state(&self, state: &mut crate::State) {
+        if state.mmu.is_none() {
+            state.mmu = Some(Default::default());
+        }
+        if let Some(mmu_state) = &mut state.mmu {
+            mmu_state.boot_mode = self.boot_mode;
+            mmu_state.boot_rom = self.boot_rom.clone();
+            mmu_state.wram = self.wram.into();
+            mmu_state.hram = self.hram.into();
+        }
+        self.cartridge.poll_state(state);
+        self.io.poll_state(state);
     }
 }

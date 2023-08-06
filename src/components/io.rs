@@ -1,7 +1,7 @@
 //! Joypad and serial transfer input/output handler
 //!
 //! Todo: Implement interrupts
-use crate::{bits::Bits, TCycles};
+use crate::{bits::Bits, state::PollState, TCycles};
 
 /// Joypad and serial transfer handler
 #[derive(Debug)]
@@ -202,5 +202,19 @@ mod test {
 
         io.write(0xFF00, 0b0010_0000);
         assert_eq!(io.read(0xFF00), 0b0010_0111);
+    }
+}
+
+impl PollState for IoHandler {
+    fn poll_state(&self, state: &mut crate::State) {
+        if state.io.is_none() {
+            state.io = Some(Default::default());
+        }
+        if let Some(io_state) = &mut state.io {
+            io_state.transmitted_bytes = self.sent_bytes.clone();
+            io_state.registers.insert("P1".into(), self.compute_joy());
+            io_state.registers.insert("SB".into(), self.sb);
+            io_state.registers.insert("SC".into(), self.sc);
+        }
     }
 }
