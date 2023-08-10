@@ -1,10 +1,12 @@
+mod widgets;
+
 use std::sync::mpsc::{self};
 
 use fltk::{
     app::{self},
     browser,
     button::{Button, CheckButton},
-    enums::{CallbackTrigger, Color},
+    enums::CallbackTrigger,
     frame::Frame,
     group::{Flex, Tabs},
     input,
@@ -12,7 +14,6 @@ use fltk::{
     text::TextDisplay,
     window::DoubleWindow,
 };
-use fltk_table::{SmartTable, TableOpts};
 
 const WINDOW_WIDTH: i32 = 1000;
 const WINDOW_HEIGHT: i32 = 800;
@@ -22,9 +23,6 @@ const COMMAND_COLUMN_WIDTH: i32 = 400;
 const BUTTON_HEIGHT: i32 = 35;
 const LABEL_HEIGHT: i32 = BUTTON_HEIGHT;
 const BREAKPOINT_BROWSER_HEIGHT: i32 = 3 * BUTTON_HEIGHT;
-const MEMORY_TABLE_NUMBER_OF_COLUMNS: i32 = 16;
-const MEMORY_TABLE_ROW_HEADER_WIDTH: i32 = 55;
-const MEMORY_TABLE_ROW_WIDTH_OFFSET: i32 = 37;
 
 #[derive(Debug)]
 pub struct Debugger {
@@ -194,47 +192,29 @@ impl Debugger {
                             let mut memory_tabs = Tabs::default_fill();
                             {
                                 let mut row = Flex::default_fill().row().with_label("ROM\t");
-                                let mut rom_table = SmartTable::default().with_opts(TableOpts {
-                                    rows: 0x4000 / MEMORY_TABLE_NUMBER_OF_COLUMNS,
-                                    cols: MEMORY_TABLE_NUMBER_OF_COLUMNS,
-                                    editable: false,
-                                    cell_border_color: Color::BackGround.lighter(),
-                                    ..Default::default()
-                                });
-                                rom_table.set_row_header_width(MEMORY_TABLE_ROW_HEADER_WIDTH);
-                                for i in 0..MEMORY_TABLE_NUMBER_OF_COLUMNS {
-                                    rom_table.set_col_header_value(i, &format!("{:01X}", i));
-                                }
-                                for i in 0..rom_table.row_count() {
-                                    rom_table.set_row_header_value(
-                                        i,
-                                        &format!("{:04X}", i * MEMORY_TABLE_NUMBER_OF_COLUMNS),
-                                    );
-                                }
+                                let mut _rom_table = widgets::MemoryTable::new(&mut row, 0x8000);
                                 row.end();
                                 row.set_margin(MARGIN);
-                                row.resize_callback(move |_, _, _, w, _| {
-                                    rom_table.set_col_width_all(
-                                        (w - MEMORY_TABLE_ROW_HEADER_WIDTH
-                                            - MEMORY_TABLE_ROW_WIDTH_OFFSET)
-                                            / MEMORY_TABLE_NUMBER_OF_COLUMNS,
-                                    );
-                                });
                             }
                             {
-                                let row = Flex::default_fill().row().with_label("External RAM\t");
-                                Frame::default().with_label("External RAM here");
+                                let mut row =
+                                    Flex::default_fill().row().with_label("External RAM\t");
+                                let _external_ram_table =
+                                    widgets::MemoryTable::new(&mut row, 0x4000);
                                 row.end();
+                                row.set_margin(MARGIN);
                             }
                             {
-                                let row = Flex::default_fill().row().with_label("WRAM\t");
-                                Frame::default().with_label("WRAM here");
+                                let mut row = Flex::default_fill().row().with_label("WRAM\t");
+                                let _wram_table = widgets::MemoryTable::new(&mut row, 0x4000);
                                 row.end();
+                                row.set_margin(MARGIN);
                             }
                             {
-                                let row = Flex::default_fill().row().with_label("HRAM\t");
-                                Frame::default().with_label("HRAM here");
+                                let mut row = Flex::default_fill().row().with_label("HRAM\t");
+                                let _hram_table = widgets::MemoryTable::new(&mut row, 0x4000);
                                 row.end();
+                                row.set_margin(MARGIN);
                             }
                             memory_tabs.end();
                             memory_tabs.visible_focus(false);
