@@ -11,7 +11,7 @@ use fltk::{
     group::{Flex, Tabs},
     input,
     prelude::*,
-    text::TextDisplay,
+    text::{TextBuffer, TextDisplay},
     window::DoubleWindow,
 };
 
@@ -46,9 +46,11 @@ pub struct Debugger {
     reg_pc: WideRegisterDisplay,
     reg_sp: WideRegisterDisplay,
     rom_table: MemoryTable,
-    external_ram_table: MemoryTable,
+    external_ram_table: Option<MemoryTable>,
     wram_table: MemoryTable,
     hram_table: MemoryTable,
+    cartridge: browser::Browser,
+    serial_output: TextDisplay,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +62,7 @@ pub enum Message {
 }
 
 impl Debugger {
-    pub fn new(msg_sender: Sender<Message>) -> Self {
+    pub fn new(msg_sender: Sender<Message>, state: &qgb::State) -> Self {
         let _app = app::App::default();
 
         let disassembly;
@@ -82,6 +84,8 @@ impl Debugger {
         let external_ram_table;
         let wram_table;
         let hram_table;
+        let cartridge;
+        let serial_output;
 
         let mut window = DoubleWindow::default()
             .with_size(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -201,10 +205,10 @@ impl Debugger {
                             {
                                 let mut col = Flex::default_fill().column();
                                 let cartridge_label = Frame::default().with_label("Cartridge");
-                                let _cartridge_state = browser::Browser::default();
+                                cartridge = browser::Browser::default();
                                 let serial_label =
                                     Frame::default().with_label("Serial Data Output");
-                                let _serial_data = TextDisplay::default();
+                                serial_output = TextDisplay::default();
                                 col.end();
                                 col.fixed(&cartridge_label, BUTTON_HEIGHT);
                                 col.fixed(&serial_label, BUTTON_HEIGHT);
@@ -223,12 +227,18 @@ impl Debugger {
                                 row.end();
                                 row.set_margin(MARGIN);
                             }
-                            {
-                                let mut row =
-                                    Flex::default_fill().row().with_label("External RAM\t");
-                                external_ram_table = widgets::MemoryTable::new(&mut row);
-                                row.end();
-                                row.set_margin(MARGIN);
+                            if let Some(cart_state) = &state.cartridge {
+                                if cart_state.ram.is_some() {
+                                    let mut row =
+                                        Flex::default_fill().row().with_label("External RAM\t");
+                                    external_ram_table = Some(widgets::MemoryTable::new(&mut row));
+                                    row.end();
+                                    row.set_margin(MARGIN);
+                                } else {
+                                    external_ram_table = None;
+                                }
+                            } else {
+                                external_ram_table = None;
                             }
                             {
                                 let mut row = Flex::default_fill().row().with_label("WRAM\t");
@@ -304,6 +314,8 @@ impl Debugger {
             external_ram_table,
             wram_table,
             hram_table,
+            cartridge,
+            serial_output,
         }
     }
 
@@ -330,6 +342,80 @@ impl Debugger {
             self.cpu_c_flag.set(cpu_state.c_flag);
             self.reg_pc.update(cpu_state.pc);
             self.reg_sp.update(cpu_state.sp);
+        }
+
+        // Cartridge State
+        if let Some(cart_state) = &state.cartridge {
+            self.cartridge.clear();
+            self.cartridge
+                .add(&format!("Title: {}", cart_state.header.title));
+            self.cartridge.add(&format!(
+                "Cartridge Type: {:?}",
+                cart_state.header.cartridge_type
+            ));
+            self.cartridge
+                .add(&format!("ROM Banks: {}", cart_state.header.rom_banks));
+            self.cartridge
+                .add(&format!("RAM Banks: {}", cart_state.header.ram_banks));
+            self.cartridge
+                .add(&format!("Checksum: {}", cart_state.header.checksum));
+            self.cartridge.add(&format!(
+                "Checksum Passed: {}",
+                cart_state.header.checksum_passed
+            ));
+            self.cartridge
+                .add(&format!("ROM Bank0: {}", cart_state.rom_bank0));
+            self.cartridge
+                .add(&format!("ROM Bank1: {}", cart_state.rom_bank1));
+            self.cartridge
+                .add(&format!("RAM Enabled: {}", cart_state.ram_enabled));
+            self.cartridge
+                .add(&format!("RAM Bank: {}", cart_state.ram_bank));
+            for (key, value) in &cart_state.mbc_state {
+                self.cartridge.add(&format!("{}: {}", key, value));
+            }
+
+            // ROM table
+            let mut rom = Vec::with_capacity(
+                2 * (cart_state.rom_bank0_range.end - cart_state.rom_bank0_range.start),
+            );
+            rom.extend_from_slice(
+                &cart_state.rom[cart_state.rom_bank0_range.start..cart_state.rom_bank0_range.end],
+            );
+            rom.extend_from_slice(
+                &cart_state.rom[cart_state.rom_bank1_range.start..cart_state.rom_bank1_range.end],
+            );
+            if let Some(mmu_state) = &state.mmu {
+                if mmu_state.boot_mode {
+                    rom[0..mmu_state.boot_rom.len()].copy_from_slice(&mmu_state.boot_rom);
+                }
+            }
+            self.rom_table.update(&rom, 0);
+
+            // RAM table
+            if let Some(ram_table) = &mut self.external_ram_table {
+                if let Some(ram) = &cart_state.ram {
+                    if let Some(range) = &cart_state.ram_bank_range {
+                        ram_table
+                            .update(&ram[range.start..range.end], qgb::State::EXTERNAL_RAM_START);
+                    }
+                }
+            }
+        }
+
+        // MMU state
+        if let Some(mmu_state) = &state.mmu {
+            self.wram_table
+                .update(&mmu_state.wram, qgb::State::WRAM_START);
+            self.hram_table
+                .update(&mmu_state.hram, qgb::State::HRAM_START);
+        }
+
+        // IO state
+        if let Some(io_state) = &state.io {
+            let mut buffer = TextBuffer::default();
+            buffer.set_text(&io_state.transmitted_bytes_ascii());
+            self.serial_output.set_buffer(buffer);
         }
     }
 }

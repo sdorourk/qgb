@@ -76,7 +76,7 @@ enum EmulatorRunState {
 
 fn run(mut gb: qgb::GameBoy) {
     let (msg_sender, msg_receiver) = channel::<Message>();
-    let mut debugger = debugger::Debugger::new(msg_sender);
+    let mut debugger = debugger::Debugger::new(msg_sender, gb.state());
     debugger.update(gb.state());
     let mut run_state = EmulatorRunState::Pause;
     let mut cycle_count: TCycles = 0;

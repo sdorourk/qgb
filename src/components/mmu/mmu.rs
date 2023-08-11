@@ -307,7 +307,10 @@ impl PollState for Mmu {
             mmu_state.boot_mode = self.boot_mode;
             mmu_state.boot_rom = self.boot_rom.clone();
             mmu_state.wram = self.wram.into();
-            mmu_state.hram = self.hram.into();
+            let mut hram: Vec<u8> = self.hram.into();
+            // TODO: Instead of adding 0 to HRAM, should add interrupt enable flag ($FFFF)
+            hram.push(0);
+            mmu_state.hram = hram.into();
         }
         self.cartridge.poll_state(state);
         self.io.poll_state(state);

@@ -14,6 +14,7 @@ const MEMORY_TABLE_ROW_WIDTH_OFFSET: i32 = 37;
 #[derive(Debug)]
 pub struct MemoryTable {
     table: SmartTable,
+    opts: TableOpts,
     data_size: i32,
 }
 
@@ -23,13 +24,15 @@ impl MemoryTable {
         // for the first time
         let data_size = MEMORY_TABLE_NUMBER_OF_COLUMNS * 20;
 
-        let table = SmartTable::default().with_opts(TableOpts {
+        let opts = TableOpts {
             rows: data_size / MEMORY_TABLE_NUMBER_OF_COLUMNS,
             cols: MEMORY_TABLE_NUMBER_OF_COLUMNS,
             editable: false,
             cell_border_color: Color::BackGround.lighter(),
             ..Default::default()
-        });
+        };
+
+        let table = SmartTable::default().with_opts(opts);
 
         flex_row.resize_callback({
             let mut table = table.clone();
@@ -41,37 +44,46 @@ impl MemoryTable {
             }
         });
 
-        let mut memory_table = Self { table, data_size };
-        memory_table.update_data_size(data_size);
+        let mut memory_table = Self {
+            table,
+            opts,
+            data_size,
+        };
+        memory_table.update_data_size(data_size, 0);
         memory_table
     }
 
-    fn update_data_size(&mut self, data_size: i32) {
+    fn update_data_size(&mut self, data_size: i32, start_address: u16) {
         assert!(data_size > 0);
         assert_eq!(data_size % MEMORY_TABLE_NUMBER_OF_COLUMNS, 0);
 
         self.data_size = data_size;
-        self.table
-            .set_rows(data_size / MEMORY_TABLE_NUMBER_OF_COLUMNS);
+        self.opts.rows = data_size / MEMORY_TABLE_NUMBER_OF_COLUMNS;
+        self.table.set_opts(self.opts);
         self.table
             .set_row_header_width(MEMORY_TABLE_ROW_HEADER_WIDTH);
         for i in 0..MEMORY_TABLE_NUMBER_OF_COLUMNS {
             self.table.set_col_header_value(i, &format!("{:01X}", i));
         }
         for i in 0..self.table.row_count() {
-            self.table
-                .set_row_header_value(i, &format!("{:04X}", i * MEMORY_TABLE_NUMBER_OF_COLUMNS));
+            self.table.set_row_header_value(
+                i,
+                &format!(
+                    "{:04X}",
+                    i32::from(start_address) + i * MEMORY_TABLE_NUMBER_OF_COLUMNS
+                ),
+            );
         }
     }
 
-    pub fn update(&mut self, data: &[u8]) {
+    pub fn update(&mut self, data: &[u8], start_address: u16) {
         assert!(!data.is_empty());
         assert!(i32::try_from(data.len()).is_ok());
 
         let data_size = i32::try_from(data.len()).unwrap();
 
         if data_size != self.data_size {
-            self.update_data_size(data_size);
+            self.update_data_size(data_size, start_address);
         }
 
         for i in 0..self.table.row_count() {
