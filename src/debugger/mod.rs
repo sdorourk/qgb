@@ -1,6 +1,6 @@
 mod widgets;
 
-use std::sync::mpsc::{self};
+use std::sync::mpsc::Sender;
 
 use fltk::{
     app::{self},
@@ -15,6 +15,10 @@ use fltk::{
     window::DoubleWindow,
 };
 
+use self::widgets::{
+    EmitButton, InstructionBrowser, MemoryTable, RegisterDisplay, WideRegisterDisplay,
+};
+
 const WINDOW_WIDTH: i32 = 1000;
 const WINDOW_HEIGHT: i32 = 800;
 const PADDING: i32 = 10;
@@ -26,12 +30,29 @@ const BREAKPOINT_BROWSER_HEIGHT: i32 = 3 * BUTTON_HEIGHT;
 
 #[derive(Debug)]
 pub struct Debugger {
-    msg_rx: mpsc::Receiver<Message>,
-    request_close: bool,
+    disassembly: InstructionBrowser,
+    reg_a: RegisterDisplay,
+    reg_b: RegisterDisplay,
+    reg_c: RegisterDisplay,
+    reg_d: RegisterDisplay,
+    reg_e: RegisterDisplay,
+    reg_f: RegisterDisplay,
+    reg_h: RegisterDisplay,
+    reg_l: RegisterDisplay,
+    cpu_z_flag: CheckButton,
+    cpu_n_flag: CheckButton,
+    cpu_h_flag: CheckButton,
+    cpu_c_flag: CheckButton,
+    reg_pc: WideRegisterDisplay,
+    reg_sp: WideRegisterDisplay,
+    rom_table: MemoryTable,
+    external_ram_table: MemoryTable,
+    wram_table: MemoryTable,
+    hram_table: MemoryTable,
 }
 
-#[derive(Debug)]
-enum Message {
+#[derive(Debug, Clone, Copy)]
+pub enum Message {
     Pause,
     Run,
     Step,
@@ -39,9 +60,28 @@ enum Message {
 }
 
 impl Debugger {
-    pub fn new(_state: &qgb::State) -> Self {
+    pub fn new(msg_sender: Sender<Message>) -> Self {
         let _app = app::App::default();
-        let (msg_tx, msg_rx) = mpsc::channel::<Message>();
+
+        let disassembly;
+        let reg_a;
+        let reg_b;
+        let reg_c;
+        let reg_d;
+        let reg_e;
+        let reg_f;
+        let reg_h;
+        let reg_l;
+        let cpu_z_flag;
+        let cpu_n_flag;
+        let cpu_h_flag;
+        let cpu_c_flag;
+        let reg_pc;
+        let reg_sp;
+        let rom_table;
+        let external_ram_table;
+        let wram_table;
+        let hram_table;
 
         let mut window = DoubleWindow::default()
             .with_size(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -53,28 +93,15 @@ impl Debugger {
             {
                 {
                     let mut row = Flex::default_fill().row();
-                    let mut run = Button::default().with_label("Run");
-                    let mut pause = Button::default().with_label("Pause");
-                    let mut step = Button::default().with_label("Step");
+                    let _run = EmitButton::new("Run", msg_sender.clone(), Message::Run);
+                    let _pause = EmitButton::new("Pause", msg_sender.clone(), Message::Pause);
+                    let _step = EmitButton::new("Step", msg_sender.clone(), Message::Step);
                     row.end();
                     row.set_pad(PADDING);
                     col.fixed(&row, BUTTON_HEIGHT);
-
-                    let msg_tx_clone1 = msg_tx.clone();
-                    let msg_tx_clone2 = msg_tx.clone();
-                    let msg_tx_clone3 = msg_tx.clone();
-                    run.set_callback(move |_| {
-                        _ = msg_tx_clone1.send(Message::Run);
-                    });
-                    pause.set_callback(move |_| {
-                        _ = msg_tx_clone2.send(Message::Pause);
-                    });
-                    step.set_callback(move |_| {
-                        _ = msg_tx_clone3.send(Message::Step);
-                    });
                 }
 
-                let _disassembly = browser::Browser::default();
+                disassembly = InstructionBrowser::new();
 
                 let breakpoint_label = Frame::default().with_label("Breakpoints");
                 col.fixed(&breakpoint_label, LABEL_HEIGHT);
@@ -112,46 +139,46 @@ impl Debugger {
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("A:");
-                                    let _reg_a = TextDisplay::default();
+                                    reg_a = RegisterDisplay::default();
                                     Frame::default().with_label("F:");
-                                    let _reg_f = TextDisplay::default();
+                                    reg_f = RegisterDisplay::default();
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("B:");
-                                    let _reg_b = TextDisplay::default();
+                                    reg_b = RegisterDisplay::default();
                                     Frame::default().with_label("C:");
-                                    let _reg_c = TextDisplay::default();
+                                    reg_c = RegisterDisplay::default();
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("D:");
-                                    let _reg_d = TextDisplay::default();
+                                    reg_d = RegisterDisplay::default();
                                     Frame::default().with_label("E:");
-                                    let _reg_e = TextDisplay::default();
+                                    reg_e = RegisterDisplay::default();
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("H:");
-                                    let _reg_h = TextDisplay::default();
+                                    reg_h = RegisterDisplay::default();
                                     Frame::default().with_label("L:");
-                                    let _reg_l = TextDisplay::default();
+                                    reg_l = RegisterDisplay::default();
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("Flags:");
-                                    let _cpu_z_flag = CheckButton::default_fill().with_label("Z");
-                                    let _cpu_n_flag = CheckButton::default_fill().with_label("N");
-                                    let _cpu_h_flag = CheckButton::default_fill().with_label("H");
-                                    let _cpu_c_flag = CheckButton::default_fill().with_label("C");
+                                    cpu_z_flag = CheckButton::default_fill().with_label("Z");
+                                    cpu_n_flag = CheckButton::default_fill().with_label("N");
+                                    cpu_h_flag = CheckButton::default_fill().with_label("H");
+                                    cpu_c_flag = CheckButton::default_fill().with_label("C");
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
@@ -159,9 +186,9 @@ impl Debugger {
                                 {
                                     let row = Flex::default_fill().row();
                                     Frame::default().with_label("PC:");
-                                    let _reg_pc = TextDisplay::default();
+                                    reg_pc = WideRegisterDisplay::default();
                                     Frame::default().with_label("SP:");
-                                    let _reg_sp = TextDisplay::default();
+                                    reg_sp = WideRegisterDisplay::default();
                                     row.end();
                                     col.fixed(&row, BUTTON_HEIGHT);
                                 }
@@ -192,27 +219,26 @@ impl Debugger {
                             let mut memory_tabs = Tabs::default_fill();
                             {
                                 let mut row = Flex::default_fill().row().with_label("ROM\t");
-                                let mut _rom_table = widgets::MemoryTable::new(&mut row, 0x8000);
+                                rom_table = widgets::MemoryTable::new(&mut row);
                                 row.end();
                                 row.set_margin(MARGIN);
                             }
                             {
                                 let mut row =
                                     Flex::default_fill().row().with_label("External RAM\t");
-                                let _external_ram_table =
-                                    widgets::MemoryTable::new(&mut row, 0x4000);
+                                external_ram_table = widgets::MemoryTable::new(&mut row);
                                 row.end();
                                 row.set_margin(MARGIN);
                             }
                             {
                                 let mut row = Flex::default_fill().row().with_label("WRAM\t");
-                                let _wram_table = widgets::MemoryTable::new(&mut row, 0x4000);
+                                wram_table = widgets::MemoryTable::new(&mut row);
                                 row.end();
                                 row.set_margin(MARGIN);
                             }
                             {
                                 let mut row = Flex::default_fill().row().with_label("HRAM\t");
-                                let _hram_table = widgets::MemoryTable::new(&mut row, 0x4000);
+                                hram_table = widgets::MemoryTable::new(&mut row);
                                 row.end();
                                 row.set_margin(MARGIN);
                             }
@@ -252,31 +278,58 @@ impl Debugger {
         window.end();
         window.set_trigger(CallbackTrigger::Closed);
         window.set_callback(move |_| {
-            _ = msg_tx.send(Message::Quit);
+            _ = msg_sender.send(Message::Quit);
         });
         window.resizable(&row);
         window.size_range(WINDOW_WIDTH, WINDOW_HEIGHT, 0, 0);
         window.show();
 
         Self {
-            msg_rx,
-            request_close: false,
+            disassembly,
+            reg_a,
+            reg_b,
+            reg_c,
+            reg_d,
+            reg_e,
+            reg_f,
+            reg_h,
+            reg_l,
+            cpu_z_flag,
+            cpu_n_flag,
+            cpu_h_flag,
+            cpu_c_flag,
+            reg_pc,
+            reg_sp,
+            rom_table,
+            external_ram_table,
+            wram_table,
+            hram_table,
         }
     }
 
     pub fn handle_events(&mut self) {
         app::check();
-        if let Ok(msg) = self.msg_rx.try_recv() {
-            match msg {
-                Message::Pause => println!("Pause"),
-                Message::Run => println!("Run"),
-                Message::Step => println!("Step"),
-                Message::Quit => self.request_close = true,
-            }
-        }
+        app::redraw();
     }
 
-    pub fn request_close(&self) -> bool {
-        self.request_close
+    pub fn update(&mut self, state: &qgb::State) {
+        // CPU state
+        if let Some(cpu_state) = &state.cpu {
+            self.disassembly.update(&cpu_state.instructions);
+            self.reg_a.update(cpu_state.a);
+            self.reg_b.update(cpu_state.b);
+            self.reg_c.update(cpu_state.c);
+            self.reg_d.update(cpu_state.d);
+            self.reg_e.update(cpu_state.e);
+            self.reg_f.update(cpu_state.f);
+            self.reg_h.update(cpu_state.h);
+            self.reg_l.update(cpu_state.l);
+            self.cpu_z_flag.set(cpu_state.z_flag);
+            self.cpu_n_flag.set(cpu_state.n_flag);
+            self.cpu_h_flag.set(cpu_state.h_flag);
+            self.cpu_c_flag.set(cpu_state.c_flag);
+            self.reg_pc.update(cpu_state.pc);
+            self.reg_sp.update(cpu_state.sp);
+        }
     }
 }

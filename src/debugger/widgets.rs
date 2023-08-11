@@ -1,21 +1,27 @@
 use std::ops::{Deref, DerefMut};
+use std::sync::mpsc::Sender;
 
-use fltk::{enums::Color, group::Flex, prelude::*};
+use fltk::browser;
+use fltk::text::{TextBuffer, TextDisplay};
+use fltk::{button::Button, enums::Color, group::Flex, prelude::*};
 use fltk_table::{SmartTable, TableOpts};
+use qgb::state::InstructionInfo;
 
 const MEMORY_TABLE_NUMBER_OF_COLUMNS: i32 = 16;
 const MEMORY_TABLE_ROW_HEADER_WIDTH: i32 = 55;
 const MEMORY_TABLE_ROW_WIDTH_OFFSET: i32 = 37;
 
+#[derive(Debug)]
 pub struct MemoryTable {
     table: SmartTable,
     data_size: i32,
 }
 
 impl MemoryTable {
-    pub fn new(flex_row: &mut Flex, data_size: i32) -> Self {
-        assert!(data_size > 0);
-        assert_eq!(data_size % MEMORY_TABLE_NUMBER_OF_COLUMNS, 0);
+    pub fn new(flex_row: &mut Flex) -> Self {
+        // The actual value for `data_size` will be specified once `update()` is called
+        // for the first time
+        let data_size = MEMORY_TABLE_NUMBER_OF_COLUMNS * 20;
 
         let table = SmartTable::default().with_opts(TableOpts {
             rows: data_size / MEMORY_TABLE_NUMBER_OF_COLUMNS,
@@ -63,7 +69,6 @@ impl MemoryTable {
         assert!(i32::try_from(data.len()).is_ok());
 
         let data_size = i32::try_from(data.len()).unwrap();
-        assert_eq!(data_size, self.data_size);
 
         if data_size != self.data_size {
             self.update_data_size(data_size);
@@ -91,5 +96,152 @@ impl Deref for MemoryTable {
 impl DerefMut for MemoryTable {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.table
+    }
+}
+
+#[derive(Debug)]
+pub struct EmitButton {
+    button: Button,
+}
+
+impl EmitButton {
+    pub fn new<T>(label: &str, sender: Sender<T>, message: T) -> Self
+    where
+        T: 'static + Copy,
+    {
+        let mut button = Button::default().with_label(label);
+        button.set_callback(move |_| {
+            _ = sender.send(message);
+        });
+        button.visible_focus(false);
+        Self { button }
+    }
+}
+
+impl Deref for EmitButton {
+    type Target = Button;
+
+    fn deref(&self) -> &Self::Target {
+        &self.button
+    }
+}
+
+impl DerefMut for EmitButton {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.button
+    }
+}
+
+#[derive(Debug)]
+pub struct InstructionBrowser {
+    browser: browser::Browser,
+}
+
+impl InstructionBrowser {
+    pub fn new() -> Self {
+        let mut browser = browser::Browser::default();
+        browser.set_column_char('\t');
+        browser.set_column_widths(&[50, 30, 30, 50, 300]);
+        Self { browser }
+    }
+
+    pub fn update(&mut self, instructions: &[InstructionInfo]) {
+        self.browser.clear();
+        for instr in instructions {
+            let mut bytes: Vec<String> = instr.bytes.iter().map(|b| format!("{:02X}", b)).collect();
+            if bytes.len() < 3 {
+                bytes.extend_from_slice(&["".into(), "".into(), "".into()]);
+            }
+
+            let str_instr = format!(
+                "@b{:04X}:\t@C42 {}\t@C42 {}\t@C42 {}\t@C4 {}",
+                instr.address, bytes[0], bytes[1], bytes[2], instr.display
+            );
+            self.browser.add(&str_instr);
+        }
+    }
+}
+
+impl Deref for InstructionBrowser {
+    type Target = browser::Browser;
+
+    fn deref(&self) -> &Self::Target {
+        &self.browser
+    }
+}
+
+impl DerefMut for InstructionBrowser {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.browser
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct RegisterDisplay {
+    display: TextDisplay,
+}
+
+impl RegisterDisplay {
+    pub fn update(&mut self, value: u8) {
+        let format_str = format!("{:02X}", value);
+        match self.display.buffer() {
+            Some(mut buffer) => {
+                buffer.set_text(&format_str);
+            }
+            None => {
+                let mut buffer = TextBuffer::default();
+                buffer.set_text(&format_str);
+                self.display.set_buffer(buffer);
+            }
+        }
+    }
+}
+
+impl Deref for RegisterDisplay {
+    type Target = TextDisplay;
+
+    fn deref(&self) -> &Self::Target {
+        &self.display
+    }
+}
+
+impl DerefMut for RegisterDisplay {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.display
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WideRegisterDisplay {
+    display: TextDisplay,
+}
+
+impl WideRegisterDisplay {
+    pub fn update(&mut self, value: u16) {
+        let format_str = format!("{:04X}", value);
+        match self.display.buffer() {
+            Some(mut buffer) => {
+                buffer.set_text(&format_str);
+            }
+            None => {
+                let mut buffer = TextBuffer::default();
+                buffer.set_text(&format_str);
+                self.display.set_buffer(buffer);
+            }
+        }
+    }
+}
+
+impl Deref for WideRegisterDisplay {
+    type Target = TextDisplay;
+
+    fn deref(&self) -> &Self::Target {
+        &self.display
+    }
+}
+
+impl DerefMut for WideRegisterDisplay {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.display
     }
 }
