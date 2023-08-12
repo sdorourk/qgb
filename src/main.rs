@@ -95,9 +95,14 @@ fn run(mut gb: qgb::GameBoy) {
                 cycle_count = 0;
             }
             EmulatorRunState::Run => {
+                let breakpoints = debugger.breakpoints();
                 cycle_count += CYCLES_PER_FRAME;
                 while cycle_count > 0 {
                     cycle_count -= gb.step();
+                    if breakpoints.contains(&gb.pc()) {
+                        run_state = EmulatorRunState::Pause;
+                        break;
+                    }
                 }
                 debugger.update(gb.state());
             }

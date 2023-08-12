@@ -34,4 +34,8 @@ impl GameBoy {
     pub fn step(&mut self) -> TCycles {
         self.cpu.step()
     }
+
+    pub fn pc(&self) -> u16 {
+        self.cpu.pc
+    }
 }

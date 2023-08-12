@@ -1,6 +1,9 @@
 mod widgets;
 
-use std::sync::mpsc::Sender;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::mpsc::{channel, Receiver, Sender},
+};
 
 use fltk::{
     app::{self},
@@ -51,6 +54,15 @@ pub struct Debugger {
     hram_table: MemoryTable,
     cartridge: browser::Browser,
     serial_output: TextDisplay,
+    breakpoint_list: browser::SelectBrowser,
+    breakpoints: HashMap<String, u16>,
+    breakpoint_receiver: Receiver<BreakpointEvent>,
+}
+
+#[derive(Debug)]
+enum BreakpointEvent {
+    Add(String, u16),
+    Delete(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -86,6 +98,9 @@ impl Debugger {
         let hram_table;
         let cartridge;
         let serial_output;
+        let breakpoint_list;
+
+        let (breakpoint_sender, breakpoint_receiver) = channel::<BreakpointEvent>();
 
         let mut window = DoubleWindow::default()
             .with_size(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -110,14 +125,36 @@ impl Debugger {
                 let breakpoint_label = Frame::default().with_label("Breakpoints");
                 col.fixed(&breakpoint_label, LABEL_HEIGHT);
 
-                let breakpoint_list = browser::SelectBrowser::default();
+                breakpoint_list = browser::SelectBrowser::default();
                 {
                     let row = Flex::default_fill().row();
-                    let _breakpoint_input = input::Input::default();
-                    let _add_breakpoint = Button::default().with_label("Add");
-                    let _delete_breakpoint = Button::default().with_label("Delete");
+                    let mut breakpoint_input = input::Input::default();
+                    let mut add_breakpoint = Button::default().with_label("Add");
+                    let mut delete_breakpoint = Button::default().with_label("Delete");
                     row.end();
                     col.fixed(&row, BUTTON_HEIGHT);
+                    add_breakpoint.set_callback({
+                        let sender = breakpoint_sender.clone();
+                        move |_| {
+                            let addr_str = breakpoint_input.value();
+                            let addr = match u16::from_str_radix(&addr_str, 16) {
+                                Ok(value) => value,
+                                Err(_) => return,
+                            };
+                            let addr_str = format!("{:04X}", addr);
+                            _ = sender.send(BreakpointEvent::Add(addr_str, addr));
+                            breakpoint_input.set_value("");
+                        }
+                    });
+                    delete_breakpoint.set_callback({
+                        let sender = breakpoint_sender.clone();
+                        let list = breakpoint_list.clone();
+                        move |_| {
+                            if let Some(addr_str) = list.selected_text() {
+                                _ = sender.send(BreakpointEvent::Delete(addr_str));
+                            }
+                        }
+                    })
                 }
                 col.fixed(&breakpoint_list, BREAKPOINT_BROWSER_HEIGHT);
             }
@@ -316,12 +353,44 @@ impl Debugger {
             hram_table,
             cartridge,
             serial_output,
+            breakpoints: HashMap::default(),
+            breakpoint_receiver,
+            breakpoint_list,
         }
     }
 
     pub fn handle_events(&mut self) {
         app::check();
         app::redraw();
+        if let Ok(bp_event) = self.breakpoint_receiver.try_recv() {
+            match bp_event {
+                BreakpointEvent::Add(addr_str, addr) => {
+                    if !self.breakpoints.contains_key(&addr_str) {
+                        self.breakpoints.insert(addr_str.clone(), addr);
+                        self.breakpoint_list.add(&addr_str);
+                    }
+                }
+                BreakpointEvent::Delete(addr_str) => {
+                    self.breakpoints.remove(&addr_str);
+                    for idx in 1..self.breakpoint_list.size() + 1 {
+                        if let Some(idx_str) = self.breakpoint_list.text(idx) {
+                            if idx_str == addr_str {
+                                self.breakpoint_list.remove(idx);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn breakpoints(&self) -> HashSet<u16> {
+        let mut breakpoints = HashSet::with_capacity(self.breakpoints.len());
+        for value in self.breakpoints.values() {
+            breakpoints.insert(*value);
+        }
+        breakpoints
     }
 
     pub fn update(&mut self, state: &qgb::State) {
