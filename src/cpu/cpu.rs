@@ -81,7 +81,7 @@ where
             h: 0,
             l: 0,
             sp: 0,
-            pc: 0,
+            pc: 0x100,
             mmu,
             rw_cycles: 0,
         }

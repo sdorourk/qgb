@@ -28,7 +28,6 @@ impl Instruction {
                 self.cycles
             }
             Opcode::Jr(offset) => {
-                cpu.pc = cpu.pc.wrapping_sub(self.length);
                 cpu.pc = cpu.pc.wrapping_add_signed(i16::from(offset));
                 self.cycles
             }

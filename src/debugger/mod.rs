@@ -427,7 +427,7 @@ impl Debugger {
             self.cartridge
                 .add(&format!("RAM Banks: {}", cart_state.header.ram_banks));
             self.cartridge
-                .add(&format!("Checksum: {}", cart_state.header.checksum));
+                .add(&format!("Checksum: {:#04X}", cart_state.header.checksum));
             self.cartridge.add(&format!(
                 "Checksum Passed: {}",
                 cart_state.header.checksum_passed
