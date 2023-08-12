@@ -2,7 +2,12 @@ use std::fmt::Debug;
 
 use super::*;
 
-use crate::{cartridge, components::io::IoHandler, state::PollState, TCycles};
+use crate::{
+    cartridge,
+    components::{io::IoHandler, ppu::Ppu},
+    state::PollState,
+    TCycles,
+};
 
 const BOOT_ROM_SIZE: usize = 0x0100;
 
@@ -14,6 +19,7 @@ pub const ROM_BANK1_START: u16 = 0x4000;
 pub const ROM_BANK1_END: u16 = 0x7FFF;
 const VRAM_START: u16 = 0x8000;
 const VRAM_END: u16 = 0x9FFF;
+pub const VRAM_SIZE: usize = (VRAM_END - VRAM_START + 1) as usize;
 pub const EXTERNAL_RAM_START: u16 = 0xA000;
 const EXTERNAL_RAM_END: u16 = 0xBFFF;
 pub const WRAM_START: u16 = 0xC000;
@@ -23,6 +29,7 @@ const MIRROR_WRAM_START: u16 = 0xE000;
 const MIRROR_WRAM_END: u16 = 0xFDFF;
 const OAM_START: u16 = 0xFE00;
 const OAM_END: u16 = 0xFE9F;
+pub const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
 const IO_REG_START: u16 = 0xFF00;
 const IO_REG_END: u16 = 0xFF02;
 const TIMER_REG_START: u16 = 0xFF04;
@@ -58,6 +65,8 @@ pub struct Mmu {
     wram: [u8; WRAM_SIZE],
     /// Joypad and serial transfer input/output
     io: IoHandler,
+    /// Pixel processing unit
+    ppu: Ppu,
 }
 
 impl Mmu {
@@ -76,6 +85,7 @@ impl Mmu {
             hram: [0; HRAM_SIZE],
             wram: [0; WRAM_SIZE],
             io: IoHandler::new(),
+            ppu: Ppu::new(),
         })
     }
 }
@@ -192,15 +202,15 @@ impl Mmu {
                     self.cartridge.read_rom(addr)
                 }
             }
-            // MappedAddress::VRam(_) => todo!(),
+            MappedAddress::VRam(addr) => self.ppu.vram_read(addr),
             MappedAddress::ExternalRam(addr) => self.cartridge.read_ram(addr),
             MappedAddress::WRam(addr) => self.wram[usize::from(addr)],
             // MappedAddress::MirrorRam(_) => todo!(),
-            // MappedAddress::Oam(_) => todo!(),
+            MappedAddress::Oam(addr) => self.ppu.oam_read(addr),
             MappedAddress::IoReg => self.io.read(addr),
             // MappedAddress::TimerReg => todo!(),
             // MappedAddress::ApuReg => todo!(),
-            // MappedAddress::PpuReg => todo!(),
+            MappedAddress::PpuReg => self.ppu.reg_read(addr),
             MappedAddress::BankReg => unreachable!(),
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)],
             // MappedAddress::Interrupt => todo!(),
@@ -230,15 +240,15 @@ impl Mmu {
 
         match mapped_addr {
             MappedAddress::CartridgeRom => self.cartridge.write_rom(addr, value),
-            // MappedAddress::VRam(_) => todo!(),
+            MappedAddress::VRam(addr) => self.ppu.vram_write(addr, value),
             MappedAddress::ExternalRam(addr) => self.cartridge.write_ram(addr, value),
             MappedAddress::WRam(addr) => self.wram[usize::from(addr)] = value,
             // MappedAddress::MirrorRam(_) => todo!(),
-            // MappedAddress::Oam(_) => todo!(),
+            MappedAddress::Oam(addr) => self.ppu.oam_write(addr, value),
             MappedAddress::IoReg => self.io.write(addr, value),
             // MappedAddress::TimerReg => todo!(),
             // MappedAddress::ApuReg => todo!(),
-            // MappedAddress::PpuReg => todo!(),
+            MappedAddress::PpuReg => self.ppu.reg_write(addr, value),
             MappedAddress::BankReg => {
                 if value != 0 {
                     self.boot_mode = false;
