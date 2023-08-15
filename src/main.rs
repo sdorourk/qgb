@@ -82,7 +82,7 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
     let mut debugger = debugger::Debugger::new(msg_sender, gb.state());
     let mut console_logger = DefaultConsoleLogger::new(console_log, false);
     debugger.update(gb.state());
-    console_logger.print_log(gb.state());
+    console_logger.print_log(&mut gb);
     let mut run_state = EmulatorRunState::Pause;
     let mut cycle_count: TCycles = 0;
     loop {
@@ -104,7 +104,7 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
                 cycle_count += CYCLES_PER_FRAME;
                 while cycle_count > 0 {
                     cycle_count -= gb.step();
-                    console_logger.print_log(gb.state());
+                    console_logger.print_log(&mut gb);
                     if breakpoints.contains(&gb.pc()) {
                         run_state = EmulatorRunState::Pause;
                         break;
@@ -115,7 +115,7 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
             EmulatorRunState::Step => {
                 cycle_count = 0;
                 gb.step();
-                console_logger.print_log(gb.state());
+                console_logger.print_log(&mut gb);
                 run_state = EmulatorRunState::Pause;
                 debugger.update(gb.state());
             }
@@ -125,7 +125,7 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
 }
 
 trait ConsoleLogger {
-    fn print_log(&mut self, state: &qgb::State);
+    fn print_log(&mut self, gb: &mut qgb::GameBoy);
 }
 
 #[derive(Debug)]
@@ -146,8 +146,9 @@ impl DefaultConsoleLogger {
 }
 
 impl ConsoleLogger for DefaultConsoleLogger {
-    fn print_log(&mut self, state: &qgb::State) {
+    fn print_log(&mut self, gb: &mut qgb::GameBoy) {
         if self.enabled {
+            let state = gb.state();
             if let Some(cpu_state) = &state.cpu {
                 if cpu_state.pc == 0x101 {
                     self.boot_rom_ended = true;
