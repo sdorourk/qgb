@@ -10,7 +10,7 @@ use crate::TCycles;
 use super::{opcode::Register, FlagsRegister};
 
 /// A CPU opcode and its corresponding metadata.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Instruction {
     /// Instruction opcode
     pub opcode: Opcode,

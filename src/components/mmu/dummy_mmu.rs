@@ -45,3 +45,14 @@ impl Debug for DummyMmu {
         f.debug_struct("DummyMmu").finish_non_exhaustive()
     }
 }
+
+// DummyMmu does not handle any interrupts
+impl InterruptManager for DummyMmu {
+    fn if_set(&mut self, _interrupt: crate::components::interrupts::Interrupt) {}
+
+    fn if_reset(&mut self, _interrupt: crate::components::interrupts::Interrupt) {}
+
+    fn priority_interrupt(&mut self) -> Option<crate::components::interrupts::Interrupt> {
+        None
+    }
+}

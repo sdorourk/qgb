@@ -3,14 +3,14 @@ use std::fmt::Debug;
 use bitflags::bitflags;
 
 use crate::{
-    components::mmu::{ReadWriteMemory, Tick},
+    components::mmu::{InterruptManager, ReadWriteMemory, Tick},
     state::{InstructionInfo, PollState},
     TCycles,
 };
 
 use super::{
     instruction,
-    opcode::{FlagCondition, Register, WideRegister},
+    opcode::{self, FlagCondition, Register, WideRegister},
 };
 
 /// Number of cycles required to read or write a byte from memory
@@ -44,11 +44,15 @@ where
     pub sp: u16,
     /// Program counter
     pub pc: u16,
+    /// Interrupt master enable flag
+    pub ime: bool,
     /// Memory management unit
     pub mmu: T,
     /// Number of cycles executed by the MMU (and its components) from reading/writing
     /// to memory while executing the current instruction
     pub rw_cycles: TCycles,
+    /// Previously executed instruction
+    pub prev_instruction: Option<instruction::Instruction>,
 }
 
 bitflags! {
@@ -82,19 +86,30 @@ where
             l: 0,
             sp: 0,
             pc: 0,
+            ime: false,
             mmu,
             rw_cycles: 0,
+            prev_instruction: None,
         }
     }
 }
 impl<T> Cpu<T>
 where
-    T: Debug + ReadWriteMemory + Tick,
+    T: Debug + ReadWriteMemory + Tick + InterruptManager,
 {
     /// Execute the next instruction.
     ///
     /// Returns the number of cycles required to execute the instruction.
     pub fn step(&mut self) -> TCycles {
+        // Handle interrupts
+        if let Some(interrupt) = self.mmu.priority_interrupt() {
+            self.mmu.tick(8);
+            self.call(interrupt.handler_address());
+            self.mmu.tick(4);
+            return 20;
+        }
+
+        // Fetch and execute the next instruction
         let instr = match self.fetch() {
             Ok(instr) => instr,
             Err(byte) => {
@@ -102,8 +117,22 @@ where
                 return DEFAULT_READ_WRITE_CYCLES;
             }
         };
+        let cycles = self.execute(instr);
 
-        self.execute(instr)
+        // Since the effect of EI is delayed one instruction, a previous EI instruction
+        // is handled here, except if it is followed immediately by a DI instruction
+        if let Some(prev_instruction) = self.prev_instruction {
+            match (prev_instruction.opcode, instr.opcode) {
+                (opcode::Opcode::EI, opcode::Opcode::DI) => {}
+                (opcode::Opcode::EI, _) => {
+                    self.ime = true;
+                }
+                _ => {}
+            }
+        }
+
+        self.prev_instruction = Some(instr);
+        cycles
     }
 
     pub fn fetch(&self) -> Result<instruction::Instruction, u8> {

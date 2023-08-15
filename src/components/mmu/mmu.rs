@@ -4,7 +4,7 @@ use super::*;
 
 use crate::{
     cartridge,
-    components::{io::IoHandler, ppu::Ppu},
+    components::{interrupts::InterruptRegisters, io::IoHandler, ppu::Ppu},
     state::PollState,
     TCycles,
 };
@@ -34,7 +34,7 @@ const IO_REG_START: u16 = 0xFF00;
 const IO_REG_END: u16 = 0xFF02;
 const TIMER_REG_START: u16 = 0xFF04;
 const TIMER_REG_END: u16 = 0xFF07;
-const INTERRUPT_FLAG: u16 = 0xFF0F;
+pub const INTERRUPT_FLAG: u16 = 0xFF0F;
 pub const APU_CHANNEL1_SWEEP: u16 = 0xFF10;
 pub const APU_CHANNEL1_PERIOD_HIGH: u16 = 0xFF14;
 pub const APU_CHANNEL2_LENGTH: u16 = 0xFF16;
@@ -67,6 +67,8 @@ pub struct Mmu {
     io: IoHandler,
     /// Pixel processing unit
     ppu: Ppu,
+    /// Interrupt manager
+    interrupt_reg: InterruptRegisters,
 }
 
 impl Mmu {
@@ -86,6 +88,7 @@ impl Mmu {
             wram: [0; WRAM_SIZE],
             io: IoHandler::new(),
             ppu: Ppu::new(),
+            interrupt_reg: InterruptRegisters::new(),
         })
     }
 }
@@ -213,7 +216,7 @@ impl Mmu {
             MappedAddress::PpuReg => self.ppu.reg_read(addr),
             MappedAddress::BankReg => unreachable!(),
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)],
-            // MappedAddress::Interrupt => todo!(),
+            MappedAddress::Interrupt => self.interrupt_reg.read(addr),
             _ => return None,
         };
 
@@ -256,7 +259,7 @@ impl Mmu {
                 }
             }
             MappedAddress::HRam(addr) => self.hram[usize::from(addr)] = value,
-            // MappedAddress::Interrupt => todo!(),
+            MappedAddress::Interrupt => self.interrupt_reg.write(addr, value),
             _ => return Err(()),
         };
         Ok(WriteInfo {
@@ -318,11 +321,24 @@ impl PollState for Mmu {
             mmu_state.boot_rom = self.boot_rom.clone();
             mmu_state.wram = self.wram.into();
             let mut hram: Vec<u8> = self.hram.into();
-            // TODO: Instead of adding 0 to HRAM, should add interrupt enable flag ($FFFF)
-            hram.push(0);
+            hram.push(self.interrupt_reg.read(INTERRUPT_ENABLE_REG));
             mmu_state.hram = hram.into();
         }
         self.cartridge.poll_state(state);
         self.io.poll_state(state);
+    }
+}
+
+impl InterruptManager for Mmu {
+    fn if_set(&mut self, interrupt: crate::components::interrupts::Interrupt) {
+        self.interrupt_reg.if_set(interrupt);
+    }
+
+    fn if_reset(&mut self, interrupt: crate::components::interrupts::Interrupt) {
+        self.interrupt_reg.if_reset(interrupt);
+    }
+
+    fn priority_interrupt(&mut self) -> Option<crate::components::interrupts::Interrupt> {
+        self.interrupt_reg.priority_interrupt()
     }
 }

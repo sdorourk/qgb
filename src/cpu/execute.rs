@@ -232,7 +232,11 @@ impl Instruction {
                 cpu.ret();
                 self.cycles
             }
-            // Opcode::Reti => todo!(),
+            Opcode::Reti => {
+                cpu.ime = true;
+                cpu.ret();
+                self.cycles
+            }
             Opcode::JpHL => {
                 let addr = cpu.wide_reg(WideRegister::HL);
                 cpu.pc = addr;
@@ -279,8 +283,16 @@ impl Instruction {
                 cpu.pc = addr;
                 self.cycles
             }
-            // Opcode::DI => todo!(),
-            // Opcode::EI => todo!(),
+            Opcode::DI => {
+                cpu.ime = false;
+                self.cycles
+            }
+            Opcode::EI => {
+                // Since the effect of EI is delayed one instruction, the execution of EI
+                // handled in the `Cpu::step()` function by looking at what the previous
+                // instruction was
+                self.cycles
+            }
             Opcode::CallCondImm(cond, addr) => {
                 if cpu.condition(cond) {
                     cpu.call(addr);
