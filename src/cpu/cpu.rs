@@ -103,10 +103,13 @@ where
     pub fn step(&mut self) -> TCycles {
         // Handle interrupts
         if let Some(interrupt) = self.mmu.priority_interrupt() {
-            self.mmu.tick(8);
-            self.call(interrupt.handler_address());
-            self.mmu.tick(4);
-            return 20;
+            if self.ime {
+                self.mmu.tick(8);
+                self.mmu.if_reset(interrupt);
+                self.call(interrupt.handler_address());
+                self.mmu.tick(4);
+                return 20;
+            }
         }
 
         // Fetch and execute the next instruction
