@@ -17,6 +17,9 @@ struct Cli {
     /// Boot ROM
     #[arg(short, long)]
     boot_rom: PathBuf,
+    /// Console logger (for comparing logs with other emulators)
+    #[arg(short, long)]
+    console_log: bool,
 }
 
 fn main() {
@@ -38,7 +41,7 @@ fn main() {
         }
     };
 
-    run(gb);
+    run(gb, cli.console_log);
 }
 
 fn init_logger() {
@@ -74,10 +77,12 @@ enum EmulatorRunState {
     Step,
 }
 
-fn run(mut gb: qgb::GameBoy) {
+fn run(mut gb: qgb::GameBoy, console_log: bool) {
     let (msg_sender, msg_receiver) = channel::<Message>();
     let mut debugger = debugger::Debugger::new(msg_sender, gb.state());
+    let mut console_logger = DefaultConsoleLogger::new(console_log, false);
     debugger.update(gb.state());
+    console_logger.print_log(gb.state());
     let mut run_state = EmulatorRunState::Pause;
     let mut cycle_count: TCycles = 0;
     loop {
@@ -99,6 +104,7 @@ fn run(mut gb: qgb::GameBoy) {
                 cycle_count += CYCLES_PER_FRAME;
                 while cycle_count > 0 {
                     cycle_count -= gb.step();
+                    console_logger.print_log(gb.state());
                     if breakpoints.contains(&gb.pc()) {
                         run_state = EmulatorRunState::Pause;
                         break;
@@ -109,10 +115,51 @@ fn run(mut gb: qgb::GameBoy) {
             EmulatorRunState::Step => {
                 cycle_count = 0;
                 gb.step();
+                console_logger.print_log(gb.state());
                 run_state = EmulatorRunState::Pause;
                 debugger.update(gb.state());
             }
         }
         std::thread::sleep(std::time::Duration::from_secs_f64(0.016));
+    }
+}
+
+trait ConsoleLogger {
+    fn print_log(&mut self, state: &qgb::State);
+}
+
+#[derive(Debug)]
+struct DefaultConsoleLogger {
+    enabled: bool,
+    log_boot_rom: bool,
+    boot_rom_ended: bool,
+}
+
+impl DefaultConsoleLogger {
+    pub fn new(enabled: bool, log_boot_rom: bool) -> Self {
+        Self {
+            enabled,
+            log_boot_rom,
+            boot_rom_ended: false,
+        }
+    }
+}
+
+impl ConsoleLogger for DefaultConsoleLogger {
+    fn print_log(&mut self, state: &qgb::State) {
+        if self.enabled {
+            if let Some(cpu_state) = &state.cpu {
+                if cpu_state.pc == 0x101 {
+                    self.boot_rom_ended = true;
+                }
+                if self.log_boot_rom || self.boot_rom_ended {
+                    let mut memory = Vec::new();
+                    for i in 0..4 {
+                        memory.extend_from_slice(&cpu_state.instructions[i].bytes[..]);
+                    }
+                    println!("A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X})", cpu_state.a, cpu_state.f, cpu_state.b, cpu_state.c, cpu_state.d, cpu_state.e, cpu_state.h, cpu_state.l, cpu_state.sp, cpu_state.pc, memory[0], memory[1], memory[2], memory[3]);
+                }
+            }
+        }
     }
 }
