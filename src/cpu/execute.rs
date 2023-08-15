@@ -20,7 +20,7 @@ impl Instruction {
         match self.opcode {
             Opcode::Nop => self.cycles,
             Opcode::LdDerefImmSp(addr) => {
-                cpu.sp = addr;
+                cpu.write_u16(addr, cpu.sp);
                 self.cycles
             }
             Opcode::Stop => {
