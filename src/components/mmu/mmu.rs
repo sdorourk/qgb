@@ -4,7 +4,7 @@ use super::*;
 
 use crate::{
     cartridge,
-    components::{interrupts::InterruptRegisters, io::IoHandler, ppu::Ppu},
+    components::{interrupts::InterruptRegisters, io::IoHandler, ppu::Ppu, timers::Timers},
     state::PollState,
     TCycles,
 };
@@ -33,6 +33,10 @@ pub const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
 const IO_REG_START: u16 = 0xFF00;
 const IO_REG_END: u16 = 0xFF02;
 const TIMER_REG_START: u16 = 0xFF04;
+pub const DIV_REG: u16 = 0xFF04;
+pub const TIMA_REG: u16 = 0xFF05;
+pub const TMA_REG: u16 = 0xFF06;
+pub const TAC_REG: u16 = 0xFF07;
 const TIMER_REG_END: u16 = 0xFF07;
 pub const INTERRUPT_FLAG: u16 = 0xFF0F;
 pub const APU_CHANNEL1_SWEEP: u16 = 0xFF10;
@@ -69,6 +73,8 @@ pub struct Mmu {
     ppu: Ppu,
     /// Interrupt manager
     interrupt_reg: InterruptRegisters,
+    /// Timers
+    timers: Timers,
 }
 
 impl Mmu {
@@ -89,6 +95,7 @@ impl Mmu {
             io: IoHandler::new(),
             ppu: Ppu::new(),
             interrupt_reg: InterruptRegisters::new(),
+            timers: Timers::new(),
         })
     }
 }
@@ -211,7 +218,7 @@ impl Mmu {
             // MappedAddress::MirrorRam(_) => todo!(),
             MappedAddress::Oam(addr) => self.ppu.oam_read(addr),
             MappedAddress::IoReg => self.io.read(addr),
-            // MappedAddress::TimerReg => todo!(),
+            MappedAddress::TimerReg => self.timers.read(addr),
             // MappedAddress::ApuReg => todo!(),
             MappedAddress::PpuReg => self.ppu.reg_read(addr),
             MappedAddress::BankReg => unreachable!(),
@@ -249,7 +256,7 @@ impl Mmu {
             // MappedAddress::MirrorRam(_) => todo!(),
             MappedAddress::Oam(addr) => self.ppu.oam_write(addr, value),
             MappedAddress::IoReg => self.io.write(addr, value),
-            // MappedAddress::TimerReg => todo!(),
+            MappedAddress::TimerReg => self.timers.write(addr, value, &mut self.interrupt_reg),
             // MappedAddress::ApuReg => todo!(),
             MappedAddress::PpuReg => self.ppu.reg_write(addr, value),
             MappedAddress::BankReg => {
@@ -308,6 +315,7 @@ impl ReadWriteMemory for Mmu {
 impl Tick for Mmu {
     fn tick(&mut self, cycles: TCycles) {
         self.io.tick(cycles);
+        self.timers.tick(cycles, &mut self.interrupt_reg);
     }
 }
 
