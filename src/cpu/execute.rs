@@ -2,20 +2,20 @@ use std::fmt::Debug;
 
 use crate::{
     bits::Bits,
-    components::mmu::{ReadWriteMemory, Tick},
+    components::mmu::{InterruptManager, ReadWriteMemory, Tick},
     TCycles,
 };
 
 use super::{
     instruction::Instruction,
     opcode::{Opcode, Register, WideRegister},
-    Cpu, FlagsRegister,
+    Cpu, FlagsRegister, HaltState,
 };
 
 impl Instruction {
     pub(super) fn execute<T>(&self, cpu: &mut Cpu<T>) -> TCycles
     where
-        T: Debug + ReadWriteMemory + Tick,
+        T: Debug + ReadWriteMemory + Tick + InterruptManager,
     {
         match self.opcode {
             Opcode::Nop => self.cycles,
@@ -156,7 +156,16 @@ impl Instruction {
                 cpu.set_reg(reg1, value);
                 self.cycles
             }
-            // Opcode::Halt => todo!(),
+            Opcode::Halt => {
+                if cpu.ime {
+                    cpu.halt_state = Some(HaltState::Halt);
+                } else if cpu.mmu.priority_interrupt().is_some() {
+                    cpu.halt_state = Some(HaltState::HaltBug(cpu.prev_instruction));
+                } else {
+                    cpu.halt_state = Some(HaltState::Halt);
+                }
+                self.cycles
+            }
             Opcode::Add(reg) => {
                 let value = cpu.reg(reg);
                 cpu.add(value);
@@ -394,7 +403,6 @@ impl Instruction {
                 cpu.set_reg(reg, value);
                 self.cycles
             }
-            _ => self.cycles,
         }
     }
 }

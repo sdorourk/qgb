@@ -3,7 +3,10 @@ use std::fmt::Debug;
 use bitflags::bitflags;
 
 use crate::{
-    components::mmu::{InterruptManager, ReadWriteMemory, Tick},
+    components::{
+        interrupts::Interrupt,
+        mmu::{InterruptManager, ReadWriteMemory, Tick},
+    },
     state::{InstructionInfo, PollState},
     TCycles,
 };
@@ -53,6 +56,10 @@ where
     pub rw_cycles: TCycles,
     /// Previously executed instruction
     pub prev_instruction: Option<instruction::Instruction>,
+    /// Halt state
+    pub halt_state: Option<HaltState>,
+    /// Indicates the CPU should read the next byte twice.
+    pub halt_bug: bool,
 }
 
 bitflags! {
@@ -68,6 +75,19 @@ bitflags! {
         /// Carry flag
         const C = 0b0001_0000;
     }
+}
+
+/// Halt status for the CPU
+#[derive(Debug, Clone, Copy)]
+pub enum HaltState {
+    /// Regular halt mode when the CPU is waiting for an interrupt to occur
+    Halt,
+    /// Halt bug mode
+    ///
+    /// In this mode, the CPU will read the byte after the halt instruction twice.
+    /// This value contains the instruction that was executed prior to the halt
+    /// instruction.  
+    HaltBug(Option<instruction::Instruction>),
 }
 
 impl<T> Cpu<T>
@@ -90,6 +110,8 @@ where
             mmu,
             rw_cycles: 0,
             prev_instruction: None,
+            halt_state: None,
+            halt_bug: false,
         }
     }
 }
@@ -101,14 +123,40 @@ where
     ///
     /// Returns the number of cycles required to execute the instruction.
     pub fn step(&mut self) -> TCycles {
+        // Handle the case when the CPU is in a halt state
+        if let Some(status) = self.halt_state {
+            tracing::debug!(target: "cpu", "CPU is in {:?} state", status);
+            if self.mmu.priority_interrupt().is_some() {
+                match status {
+                    HaltState::Halt => {
+                        self.halt_state = None;
+                    }
+                    HaltState::HaltBug(prev_instruction) => {
+                        self.halt_state = None;
+                        match prev_instruction {
+                            Some(instruction::Instruction {
+                                opcode: opcode::Opcode::EI,
+                                ..
+                            }) => {
+                                self.pc = self.pc.wrapping_sub(1);
+                            }
+                            _ => {
+                                self.halt_bug = true;
+                            }
+                        }
+                    }
+                }
+            } else {
+                self.mmu.tick(4);
+                return 4;
+            }
+        }
+
         // Handle interrupts
         if let Some(interrupt) = self.mmu.priority_interrupt() {
             if self.ime {
-                self.mmu.tick(8);
-                self.mmu.if_reset(interrupt);
-                self.call(interrupt.handler_address());
-                self.mmu.tick(4);
-                return 20;
+                tracing::trace!(target: "cpu", "Calling ISR {:?}", interrupt);
+                return self.call_interrupt_service_routine(interrupt);
             }
         }
 
@@ -138,18 +186,32 @@ where
         cycles
     }
 
-    pub fn fetch(&self) -> Result<instruction::Instruction, u8> {
+    pub fn fetch(&mut self) -> Result<instruction::Instruction, u8> {
         let mut stream = MmuByteStream {
             pc: self.pc,
             mmu: &self.mmu,
+            halt_bug: self.halt_bug,
+            fetched_bytes: 0,
         };
-        instruction::Instruction::try_from(&mut stream)
+        let res = instruction::Instruction::try_from(&mut stream);
+        if self.halt_bug && !stream.halt_bug {
+            self.halt_bug = false;
+        }
+        res
+    }
+
+    fn call_interrupt_service_routine(&mut self, interrupt: Interrupt) -> TCycles {
+        self.mmu.tick(8);
+        self.mmu.if_reset(interrupt);
+        self.call(interrupt.handler_address());
+        self.mmu.tick(4);
+        20
     }
 }
 
 impl<T> Cpu<T>
 where
-    T: Debug + ReadWriteMemory + Tick,
+    T: Debug + ReadWriteMemory + Tick + InterruptManager,
 {
     /// Execute the given `Instruction`.
     ///
@@ -158,8 +220,14 @@ where
     fn execute(&mut self, instr: instruction::Instruction) -> TCycles {
         tracing::trace!(target: "cpu", "executing {}", instr.opcode);
 
-        // Increment the program counter as this is the default behavior for most operations
-        self.pc = self.pc.wrapping_add(instr.length);
+        // Increment the program counter (if not dealing with the halt bug) as this
+        // is the default behavior for most operations
+        if !self.halt_bug {
+            self.pc = self.pc.wrapping_add(instr.length);
+        } else {
+            assert_eq!(instr.length, 1);
+            self.halt_bug = false;
+        }
 
         // Each component should execute the number of cycles required to read the
         // instructions operands
@@ -219,6 +287,12 @@ where
     pc: u16,
     /// Memory management unit to read bytes from
     mmu: &'a T,
+    /// Halt bug
+    ///
+    /// When `true`, the first byte is read twice
+    halt_bug: bool,
+    /// Number of bytes fetched
+    fetched_bytes: usize,
 }
 
 impl<'a, T> instruction::ByteStream for MmuByteStream<'a, T>
@@ -227,7 +301,13 @@ where
 {
     fn fetch(&mut self) -> u8 {
         let old_pc = self.pc;
-        self.pc = self.pc.wrapping_add(1);
+        if self.fetched_bytes == 1 {
+            self.halt_bug = false;
+        }
+        if !self.halt_bug {
+            self.pc = self.pc.wrapping_add(1);
+        }
+        self.fetched_bytes += 1;
         self.mmu.read(old_pc)
     }
 }
