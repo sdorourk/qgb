@@ -3,6 +3,8 @@
 //! Todo: Implement interrupts
 use crate::{bits::Bits, state::PollState, TCycles};
 
+use super::mmu::InterruptManager;
+
 /// Joypad and serial transfer handler
 #[derive(Debug)]
 pub struct IoHandler {
@@ -136,12 +138,16 @@ impl IoHandler {
         value
     }
 
-    pub fn tick(&mut self, cycles: TCycles) {
+    pub fn tick<T>(&mut self, cycles: TCycles, interrupt_manager: &mut T)
+    where
+        T: InterruptManager,
+    {
         if self.sc == 0x81 {
             self.remaining_cycles += cycles;
             if self.remaining_cycles >= 4 {
                 self.remaining_cycles = 0;
                 self.serial_transfer_byte();
+                interrupt_manager.if_set(super::interrupts::Interrupt::Serial);
             } else {
                 self.remaining_cycles = 0;
             }
@@ -175,20 +181,24 @@ fn set_bit_condition(value: &mut u8, index: usize, cond: bool) {
 
 #[cfg(test)]
 mod test {
+    use crate::components::interrupts::InterruptRegisters;
+
     use super::*;
 
     #[test]
     fn serial_transfer() {
         let mut io = IoHandler::new();
+        let mut interrupt_manager = InterruptRegisters::new();
         io.write(0xFF01, 0xAB);
         assert_eq!(io.sb, 0xAB);
         io.write(0xFF02, 0x81);
-        io.tick(4);
+        io.tick(4, &mut interrupt_manager);
 
         assert_eq!(io.sent_bytes.len(), 1);
         assert_eq!(io.sent_bytes[0], 0xAB);
         assert_eq!(io.sc, 0x01);
         assert_eq!(io.sb, 0);
+        assert_eq!(interrupt_manager.read(0xFF0F), 0b0000_1000);
     }
 
     #[test]

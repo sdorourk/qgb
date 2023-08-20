@@ -314,7 +314,7 @@ impl ReadWriteMemory for Mmu {
 
 impl Tick for Mmu {
     fn tick(&mut self, cycles: TCycles) {
-        self.io.tick(cycles);
+        self.io.tick(cycles, &mut self.interrupt_reg);
         self.timers.tick(cycles, &mut self.interrupt_reg);
     }
 }
