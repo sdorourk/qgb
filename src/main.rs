@@ -1,6 +1,6 @@
 mod debugger;
 
-use std::{fs, path::PathBuf, sync::mpsc::channel};
+use std::{fs, path::PathBuf, sync::mpsc::channel, time};
 
 use clap::Parser;
 
@@ -14,6 +14,8 @@ const RGBA_WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 const RGBA_LIGHT_GRAY: [u8; 4] = [0x66, 0x66, 0x66, 0xFF];
 const RGBA_DARK_GRAY: [u8; 4] = [0xB2, 0xB2, 0xB2, 0xFF];
 const RGBA_BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0xFF];
+
+const DEFAULT_SCREEN_SCALE: u32 = 5;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -95,7 +97,7 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
 
     // Initialize the window
     let window = video_subsystem
-        .window("Game Boy Emulator", WIDTH * 5, HEIGHT * 5)
+        .window("Game Boy Emulator", WIDTH * DEFAULT_SCREEN_SCALE, HEIGHT * DEFAULT_SCREEN_SCALE)
         .position_centered()
         .resizable()
         .build()
@@ -119,7 +121,10 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
     console_logger.print_log(&mut gb);
     let mut run_state = EmulatorRunState::Pause;
     let mut cycle_count: TCycles = 0;
+    let mut clock = Clock::new(time::Duration::from_secs_f64(0.016));
+
     'running: loop {
+        clock.start();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -165,7 +170,6 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
                 debugger.update(gb.state());
             }
         }
-        std::thread::sleep(std::time::Duration::from_secs_f64(0.016));
 
         let pixels = colors_to_rgba32(&gb.screen());
         texture.with_lock(None, |buffer: &mut [u8], _: usize| {
@@ -175,6 +179,8 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
         canvas.clear();
         canvas.copy(&texture, None, None)?;
         canvas.present();
+
+        clock.wait();
     }
 
     Ok(())
@@ -191,6 +197,34 @@ fn colors_to_rgba32(colors: &[Color]) -> Vec<u8> {
         });
     }
     rgba
+}
+
+struct Clock {
+    duration: time::Duration,
+    start_instant: time::Instant,
+}
+
+impl Clock {
+    pub fn new(duration: time::Duration) -> Self {
+        Self {
+            duration,
+            start_instant: time::Instant::now(),
+        }
+    }
+
+    pub fn start(&mut self) {
+        self.start_instant = time::Instant::now();
+    }
+
+    pub fn wait(&mut self) {
+        let duration = time::Instant::now().duration_since(self.start_instant);
+        if duration < self.duration {
+            std::thread::sleep(self.duration - duration);
+        } else if self.duration < duration {
+            tracing::warn!(target: "emulator", "slow frame: frame took {} μs longer than expected", (duration - self.duration).as_micros())
+        }
+        self.start();
+    }
 }
 
 trait ConsoleLogger {
