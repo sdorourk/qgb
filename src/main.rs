@@ -5,9 +5,15 @@ use std::{fs, path::PathBuf, sync::mpsc::channel};
 use clap::Parser;
 
 use debugger::Message;
-use qgb::TCycles;
+use qgb::{Color, TCycles, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 use tracing::metadata::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+const RGBA_WHITE: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
+const RGBA_LIGHT_GRAY: [u8; 4] = [0x66, 0x66, 0x66, 0xFF];
+const RGBA_DARK_GRAY: [u8; 4] = [0xB2, 0xB2, 0xB2, 0xFF];
+const RGBA_BLACK: [u8; 4] = [0x00, 0x00, 0x00, 0xFF];
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -41,7 +47,9 @@ fn main() {
         }
     };
 
-    run(gb, cli.console_log);
+    if let Err(msg) = run(gb, cli.console_log) {
+        eprintln!("A fatal error occurred: {}", msg);
+    }
 }
 
 fn init_logger() {
@@ -77,7 +85,33 @@ enum EmulatorRunState {
     Step,
 }
 
-fn run(mut gb: qgb::GameBoy, console_log: bool) {
+fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
+
+    // Required to avoid excessive conversions
+    const HEIGHT: u32 = DISPLAY_HEIGHT as u32;
+    const WIDTH: u32 = DISPLAY_WIDTH as u32;
+
+    // Initialize the window
+    let window = video_subsystem
+        .window("Game Boy Emulator", WIDTH * 5, HEIGHT * 5)
+        .position_centered()
+        .resizable()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    let texture_creator = canvas.texture_creator();
+    canvas
+        .set_logical_size(WIDTH, HEIGHT)
+        .map_err(|e| e.to_string())?;
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGBA32, WIDTH, HEIGHT)
+        .map_err(|e| e.to_string())?;
+
+    let mut event_pump = sdl_context.event_pump()?;
+
     let (msg_sender, msg_receiver) = channel::<Message>();
     let mut debugger = debugger::Debugger::new(msg_sender, gb.state());
     let mut console_logger = DefaultConsoleLogger::new(console_log, false);
@@ -85,7 +119,18 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
     console_logger.print_log(&mut gb);
     let mut run_state = EmulatorRunState::Pause;
     let mut cycle_count: TCycles = 0;
-    loop {
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                _ => {}
+            }
+        }
+
         debugger.handle_events();
         match msg_receiver.try_recv() {
             Ok(Message::Pause) => run_state = EmulatorRunState::Pause,
@@ -121,7 +166,31 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) {
             }
         }
         std::thread::sleep(std::time::Duration::from_secs_f64(0.016));
+
+        let pixels = colors_to_rgba32(&gb.screen());
+        texture.with_lock(None, |buffer: &mut [u8], _: usize| {
+            buffer.copy_from_slice(&pixels);
+        })?;
+
+        canvas.clear();
+        canvas.copy(&texture, None, None)?;
+        canvas.present();
     }
+
+    Ok(())
+}
+
+fn colors_to_rgba32(colors: &[Color]) -> Vec<u8> {
+    let mut rgba = Vec::with_capacity(colors.len() * 4);
+    for color in colors {
+        rgba.extend_from_slice(match color {
+            Color::White => &RGBA_WHITE,
+            Color::LightGray => &RGBA_LIGHT_GRAY,
+            Color::DarkGray => &RGBA_DARK_GRAY,
+            Color::Black => &RGBA_BLACK,
+        });
+    }
+    rgba
 }
 
 trait ConsoleLogger {

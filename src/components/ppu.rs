@@ -4,9 +4,17 @@ use crate::{
         PPU_BGP, PPU_LCDC, PPU_LY, PPU_LYC, PPU_OBP0, PPU_OBP1, PPU_SCX, PPU_SCY, PPU_STAT, PPU_WX,
         PPU_WY,
     },
+    TCycles,
 };
 
-use super::mmu::{OAM_SIZE, PPU_DMA, VRAM_SIZE};
+use super::mmu::{InterruptManager, OAM_SIZE, PPU_DMA, VRAM_SIZE};
+
+pub const DISPLAY_WIDTH: usize = 160;
+pub const DISPLAY_HEIGHT: usize = 144;
+/// Tile size (in bytes)
+const TILE_SIZE: usize = 16;
+const TILE_MAP_WIDTH: usize = 32;
+const TILE_MAP_HEIGHT: usize = 32;
 
 /// Todo: Add a real PPU implementation
 #[derive(Debug)]
@@ -104,21 +112,86 @@ impl Ppu {
             _ => unreachable!(),
         }
     }
+
+    pub fn tick<T: InterruptManager>(&mut self, mut cycles: TCycles, _interrupt_manager: &mut T) {
+        while cycles > 0 {
+            cycles -= 1;
+        }
+    }
+
+    pub fn screen(&self) -> Vec<Color> {
+        let mut screen = Vec::with_capacity(DISPLAY_HEIGHT * DISPLAY_WIDTH);
+
+        for y in 0..DISPLAY_HEIGHT as u8 {
+            for x in 0..DISPLAY_WIDTH as u8 {
+                screen
+                    .push(self.bg_pixel_color(self.scx.wrapping_add(x), self.scy.wrapping_add(y)));
+            }
+        }
+
+        screen
+    }
+
+    fn bg_pixel_color(&self, x: u8, y: u8) -> Color {
+        if self.lcdc.lcd_enable {
+            let x_offset = x % 8;
+            let y_offset = y % 8;
+            let x = usize::from(x / 8);
+            let y = usize::from(y / 8);
+            let map_addr = if self.lcdc.bg_tile_map_area {
+                0x1C00 + (y * TILE_MAP_WIDTH) + x
+            } else {
+                0x1800 + (y * TILE_MAP_WIDTH) + x
+            };
+
+            let tile_index = self.vram[map_addr];
+            self.bg_tile_pixel_color(tile_index, x_offset, y_offset)
+        } else {
+            Color::Black
+        }
+    }
+
+    fn bg_tile_pixel_color(&self, tile_index: u8, x_offset: u8, y_offset: u8) -> Color {
+        assert!(x_offset < 8);
+        assert!(y_offset < 8);
+
+        let x_offset = usize::from(x_offset);
+        let y_offset = usize::from(y_offset);
+
+        let tile_addr = if self.lcdc.bg_window_tile_data_area {
+            usize::from(tile_index) * TILE_SIZE
+        } else {
+            0x0800 + usize::from(tile_index) * TILE_SIZE
+        };
+
+        let tile = &self.vram[tile_addr..tile_addr + TILE_SIZE];
+        let lsb = tile[y_offset * 2].bit(7 - x_offset);
+        let msb = tile[y_offset * 2 + 1].bit(7 - x_offset);
+        let mut val = 0;
+        if msb {
+            val.set_bit(1);
+        }
+        if lsb {
+            val.set_bit(0);
+        }
+
+        self.bgp.colors[usize::from(val)]
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
 struct Lcdc {
     /// LCD and PPU enable
     lcd_enable: bool,
-    /// Window tile map area (0 = 0x9800..=0x9BFF, 1 = 0x9C00..=0x9FFF)
+    /// Window tile map area (false = 0x9800..=0x9BFF, true = 0x9C00..=0x9FFF)
     window_tile_map_area: bool,
     /// Window enable
     window_enable: bool,
-    /// BG and window tile data areas (0 = 0x8800..=0x97FF, 1 = 0x8000..=0x8FFF)
+    /// BG and window tile data areas (false = 0x8800..=0x97FF, true = 0x8000..=0x8FFF)
     bg_window_tile_data_area: bool,
-    /// BG tile map area (0 = 0x9800..=0x9BFF, 1 = 0x9C00..=0x9FFF)
+    /// BG tile map area (false = 0x9800..=0x9BFF, true = 0x9C00..=0x9FFF)
     bg_tile_map_area: bool,
-    /// OBJ size (0 = 8x8, 1 = 8x16)
+    /// OBJ size (false = 8x8, true = 8x16)
     obj_size: bool,
     /// OBJ enable
     obj_enable: bool,
@@ -262,7 +335,7 @@ impl From<Stat> for u8 {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Color {
+pub enum Color {
     White,
     LightGray,
     DarkGray,

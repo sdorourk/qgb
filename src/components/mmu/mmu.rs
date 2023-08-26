@@ -6,7 +6,7 @@ use crate::{
     cartridge,
     components::{interrupts::InterruptRegisters, io::IoHandler, ppu::Ppu, timers::Timers},
     state::PollState,
-    TCycles,
+    Color, TCycles,
 };
 
 const BOOT_ROM_SIZE: usize = 0x0100;
@@ -286,6 +286,10 @@ impl Mmu {
             boot_rom_disabled,
         })
     }
+
+    pub fn screen(&self) -> Vec<Color> {
+        self.ppu.screen()
+    }
 }
 
 impl ReadWriteMemory for Mmu {
@@ -328,6 +332,7 @@ impl Tick for Mmu {
     fn tick(&mut self, cycles: TCycles) {
         self.io.tick(cycles, &mut self.interrupt_reg);
         self.timers.tick(cycles, &mut self.interrupt_reg);
+        self.ppu.tick(cycles, &mut self.interrupt_reg);
     }
 }
 

@@ -1,7 +1,7 @@
 pub mod error;
 pub mod state;
 
-use crate::{components::mmu, cpu::cpu, BootError, State};
+use crate::{components::mmu, cpu::cpu, BootError, Color, State};
 
 use self::state::PollState;
 
@@ -37,5 +37,9 @@ impl GameBoy {
 
     pub fn pc(&self) -> u16 {
         self.cpu.pc
+    }
+
+    pub fn screen(&self) -> Vec<Color> {
+        self.cpu.mmu.screen()
     }
 }
