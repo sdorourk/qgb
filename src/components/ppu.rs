@@ -15,6 +15,8 @@ pub const DISPLAY_HEIGHT: usize = 144;
 const TILE_SIZE: usize = 16;
 const TILE_MAP_WIDTH: usize = 32;
 const TILE_MAP_HEIGHT: usize = 32;
+const DOTS_PER_SCANLINE: usize = 456;
+const SCANLINES_PER_FRAME: u8 = 153;
 
 /// Todo: Add a real PPU implementation
 #[derive(Debug)]
@@ -33,11 +35,12 @@ pub struct Ppu {
     wx: u8,
     vram: [u8; VRAM_SIZE],
     oam: [u8; OAM_SIZE],
+    current_scanline_dots: usize,
 }
 
 impl Ppu {
     pub fn new() -> Self {
-        let mut ppu = Self {
+        Self {
             lcdc: Default::default(),
             stat: Default::default(),
             scy: 0,
@@ -52,11 +55,8 @@ impl Ppu {
             wx: 0,
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
-        };
-        // TODO: Remove this line (it is used to indicate the VBlank period and prevents
-        // the boot ROM from entering an infinite loop)
-        ppu.ly = 0x90;
-        ppu
+            current_scanline_dots: 0,
+        }
     }
 
     pub fn vram_read(&self, addr: u16) -> u8 {
@@ -115,6 +115,14 @@ impl Ppu {
 
     pub fn tick<T: InterruptManager>(&mut self, mut cycles: TCycles, _interrupt_manager: &mut T) {
         while cycles > 0 {
+            self.current_scanline_dots += 1;
+            if self.current_scanline_dots == DOTS_PER_SCANLINE {
+                self.ly += 1;
+                self.current_scanline_dots = 0;
+            }
+            if self.ly > SCANLINES_PER_FRAME {
+                self.ly = 0;
+            }
             cycles -= 1;
         }
     }
