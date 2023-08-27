@@ -97,7 +97,11 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
 
     // Initialize the window
     let window = video_subsystem
-        .window("Game Boy Emulator", WIDTH * DEFAULT_SCREEN_SCALE, HEIGHT * DEFAULT_SCREEN_SCALE)
+        .window(
+            "Game Boy Emulator",
+            WIDTH * DEFAULT_SCREEN_SCALE,
+            HEIGHT * DEFAULT_SCREEN_SCALE,
+        )
         .position_centered()
         .resizable()
         .build()

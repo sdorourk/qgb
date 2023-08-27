@@ -7,7 +7,10 @@ use crate::{
     TCycles,
 };
 
-use super::mmu::{InterruptManager, OAM_SIZE, PPU_DMA, VRAM_SIZE};
+use super::{
+    interrupts::Interrupt,
+    mmu::{InterruptManager, OAM_SIZE, PPU_DMA, VRAM_SIZE},
+};
 
 pub const DISPLAY_WIDTH: usize = 160;
 pub const DISPLAY_HEIGHT: usize = 144;
@@ -17,8 +20,10 @@ const TILE_MAP_WIDTH: usize = 32;
 const TILE_MAP_HEIGHT: usize = 32;
 const DOTS_PER_SCANLINE: usize = 456;
 const SCANLINES_PER_FRAME: u8 = 153;
+const MODE2_TOTAL_DOTS: usize = 80;
+const MODE3_TOTAL_DOTS: usize = 172;
+const MODE0_TOTAL_DOTS: usize = 204;
 
-/// Todo: Add a real PPU implementation
 #[derive(Debug)]
 pub struct Ppu {
     lcdc: Lcdc,
@@ -35,7 +40,7 @@ pub struct Ppu {
     wx: u8,
     vram: [u8; VRAM_SIZE],
     oam: [u8; OAM_SIZE],
-    current_scanline_dots: usize,
+    current_scanline_dot: usize,
 }
 
 impl Ppu {
@@ -55,7 +60,7 @@ impl Ppu {
             wx: 0,
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
-            current_scanline_dots: 0,
+            current_scanline_dot: 0,
         }
     }
 
@@ -113,16 +118,53 @@ impl Ppu {
         }
     }
 
-    pub fn tick<T: InterruptManager>(&mut self, mut cycles: TCycles, _interrupt_manager: &mut T) {
+    pub fn tick<T: InterruptManager>(&mut self, mut cycles: TCycles, interrupt_manager: &mut T) {
         while cycles > 0 {
-            self.current_scanline_dots += 1;
-            if self.current_scanline_dots == DOTS_PER_SCANLINE {
+            // Update LY and current dot location on the scanline
+            self.current_scanline_dot += 1;
+            if self.current_scanline_dot == DOTS_PER_SCANLINE {
                 self.ly += 1;
-                self.current_scanline_dots = 0;
+                self.current_scanline_dot = 0;
             }
             if self.ly > SCANLINES_PER_FRAME {
                 self.ly = 0;
             }
+
+            // Set mode and check for STAT interrupt (except for LYC = LY interrupt source)
+            if self.ly >= DISPLAY_HEIGHT as u8 {
+                if self.stat.vblank_interrupt_source && self.stat.mode_flag != ModeFlag::VBlank {
+                    interrupt_manager.if_set(Interrupt::LcdStat);
+                }
+                self.stat.mode_flag = ModeFlag::VBlank;
+            } else if self.current_scanline_dot <= MODE2_TOTAL_DOTS {
+                if self.stat.oam_interrupt_source && self.stat.mode_flag != ModeFlag::SearchingOam {
+                    interrupt_manager.if_set(Interrupt::LcdStat);
+                }
+                self.stat.mode_flag = ModeFlag::SearchingOam;
+            } else if self.current_scanline_dot <= MODE2_TOTAL_DOTS + MODE3_TOTAL_DOTS {
+                self.stat.mode_flag = ModeFlag::TransferringData;
+            } else {
+                if self.stat.hblank_interrupt_source && self.stat.mode_flag != ModeFlag::HBlank {
+                    interrupt_manager.if_set(Interrupt::LcdStat);
+                }
+                self.stat.mode_flag = ModeFlag::HBlank;
+            }
+
+            // Check LYC and LYC = LY STAT interrupt source
+            if self.ly == self.lyc {
+                self.stat.lyc_flag = true;
+                if self.stat.lyc_interrupt_source && self.current_scanline_dot == 0 {
+                    interrupt_manager.if_set(Interrupt::LcdStat);
+                }
+            } else {
+                self.stat.lyc_flag = false;
+            }
+
+            // Check for VBLANK interrupt
+            if self.ly == DISPLAY_HEIGHT as u8 && self.current_scanline_dot == 0 {
+                interrupt_manager.if_set(Interrupt::VBlank);
+            }
+
             cycles -= 1;
         }
     }
@@ -253,7 +295,7 @@ impl From<Lcdc> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ModeFlag {
     HBlank,
     VBlank,
