@@ -128,7 +128,6 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
     let mut clock = Clock::new(time::Duration::from_secs_f64(0.016));
 
     'running: loop {
-        clock.start();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -222,10 +221,14 @@ impl Clock {
 
     pub fn wait(&mut self) {
         let duration = time::Instant::now().duration_since(self.start_instant);
-        if duration < self.duration {
-            std::thread::sleep(self.duration - duration);
-        } else if self.duration < duration {
-            tracing::warn!(target: "emulator", "slow frame: frame took {} μs longer than expected", (duration - self.duration).as_micros())
+        match duration.cmp(&self.duration) {
+            std::cmp::Ordering::Less => {
+                std::thread::sleep(self.duration - duration);
+            }
+            std::cmp::Ordering::Greater => {
+                tracing::warn!(target: "emulator", "slow frame: frame took {} μs longer than expected", (duration - self.duration).as_micros())
+            }
+            std::cmp::Ordering::Equal => {}
         }
         self.start();
     }

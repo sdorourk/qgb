@@ -198,7 +198,7 @@ mod test {
         assert_eq!(io.sent_bytes[0], 0xAB);
         assert_eq!(io.sc, 0x01);
         assert_eq!(io.sb, 0);
-        assert_eq!(interrupt_manager.read(0xFF0F), 0b0000_1000);
+        assert_eq!(interrupt_manager.read(0xFF0F), 0b1110_1000);
     }
 
     #[test]

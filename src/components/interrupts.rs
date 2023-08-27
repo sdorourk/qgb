@@ -20,8 +20,8 @@ impl InterruptRegisters {
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            INTERRUPT_ENABLE_REG => self.reg_ie.bits(),
-            INTERRUPT_FLAG => self.reg_if.bits(),
+            INTERRUPT_ENABLE_REG => self.reg_ie.bits() | 0xE0,
+            INTERRUPT_FLAG => self.reg_if.bits() | 0xE0,
             _ => unreachable!(),
         }
     }
