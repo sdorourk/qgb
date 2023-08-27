@@ -135,6 +135,20 @@ fn run(mut gb: qgb::GameBoy, console_log: bool) -> Result<(), String> {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => {
+                    if let Some(button) = key_map(key) {
+                        gb.button_pressed(button);
+                    }
+                }
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } => {
+                    if let Some(button) = key_map(key) {
+                        gb.button_released(button);
+                    }
+                }
                 _ => {}
             }
         }
@@ -200,6 +214,20 @@ fn colors_to_rgba32(colors: &[Color]) -> Vec<u8> {
         });
     }
     rgba
+}
+
+fn key_map(key: Keycode) -> Option<qgb::JoypadButton> {
+    match key {
+        Keycode::Up | Keycode::W => Some(qgb::JoypadButton::Up),
+        Keycode::Down | Keycode::S => Some(qgb::JoypadButton::Down),
+        Keycode::Right | Keycode::D => Some(qgb::JoypadButton::Right),
+        Keycode::Left | Keycode::A => Some(qgb::JoypadButton::Left),
+        Keycode::Space => Some(qgb::JoypadButton::Select),
+        Keycode::Return => Some(qgb::JoypadButton::Start),
+        Keycode::Z | Keycode::J => Some(qgb::JoypadButton::A),
+        Keycode::X | Keycode::K => Some(qgb::JoypadButton::B),
+        _ => None,
+    }
 }
 
 struct Clock {

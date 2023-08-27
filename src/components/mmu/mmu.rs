@@ -6,7 +6,7 @@ use crate::{
     cartridge,
     components::{interrupts::InterruptRegisters, io::IoHandler, ppu::Ppu, timers::Timers},
     state::PollState,
-    Color, TCycles,
+    Color, JoypadButton, TCycles,
 };
 
 const BOOT_ROM_SIZE: usize = 0x0100;
@@ -289,6 +289,14 @@ impl Mmu {
 
     pub fn screen(&self) -> Vec<Color> {
         self.ppu.screen()
+    }
+
+    pub fn button_pressed(&mut self, button: JoypadButton) {
+        self.io.button_pressed(button);
+    }
+
+    pub fn button_released(&mut self, button: JoypadButton) {
+        self.io.button_released(button);
     }
 }
 
